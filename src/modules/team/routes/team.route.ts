@@ -1,4 +1,4 @@
-import { authenticateJWT, requireRole } from "@/middlewares/auth.middleware";
+import { requireRole } from "@/middlewares/auth.middleware";
 import { teamController } from "../controllers/team.controller";
 import { asyncHandler } from "@/handlers/async.handler";
 import express from "express";

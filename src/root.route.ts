@@ -2,6 +2,7 @@ import { authenticateJWT } from "@/middlewares/auth.middleware";
 import { authRouter } from "./modules/auth/routes";
 import { Router } from "express";
 import { teamRouter } from "./modules/team/routes/team.route";
+import { taskRouter } from "./modules/task/routes/task.route";
 
 const router = Router();
 
@@ -15,6 +16,11 @@ const moduleRoutes = [
     protected: true,
     path: "/team",
     module: teamRouter,
+  },
+  {
+    protected: true,
+    path: "/task",
+    module: taskRouter,
   },
 ];
 
