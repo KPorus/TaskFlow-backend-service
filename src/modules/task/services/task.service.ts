@@ -1,10 +1,19 @@
 import { HTTP_STATUS_CODES } from "@/utils/http-status-codes";
+import { User } from "@/modules/auth/models/auth.model";
 import { AppError } from "@/types/error.type";
 import { Task } from "../models/task.model";
 import { ITask } from "../types/task.types";
 import { Types } from "mongoose";
 
 const createTask = async (data: Partial<ITask>) => {
+  let user;
+  if (data!.assignee) {
+    user = await User.findById({ _id: data.assignee });
+    if (!user) {
+      throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "No User found for task");
+    }
+  }
+
   const task = await Task.createTask(data);
   return {
     message: "Task created successfully",
@@ -21,7 +30,7 @@ const getTaskList = async (teamId: Types.ObjectId | string) => {
     message: "Task list fetched successfully",
     tasks,
   };
-}
+};
 
 const assignTask = async (userId: Types.ObjectId | string) => {
   const tasks = await Task.assignTask(userId);

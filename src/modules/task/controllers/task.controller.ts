@@ -1,19 +1,25 @@
 import { AuthRequest } from "@/modules/auth/types/auth.types";
 import { HTTP_STATUS_CODES } from "@/utils/http-status-codes";
 import { sendResponse } from "@/handlers/response.handler";
+import { TTaskInput } from "../validators/task.validator";
 import { taskService } from "../services/task.service";
 import { Request, Response } from "express";
+import { Types } from "mongoose";
 
 const createTask = async (req: AuthRequest, res: Response) => {
-  const { title, description, dueDate, priority, assignee, team } = req.body;
+  const { title, description, dueDate, priority, assignee } =
+    req.body as TTaskInput;
+  const team = req.params.teamId;
+  // console.log(req.body);
   const result = await taskService.createTask({
     title,
     description,
-    dueDate,
+    dueDate: dueDate ? new Date(dueDate) : undefined,
     priority,
-    assignee,
-    team,
+    assignee:
+      typeof assignee === "string" ? new Types.ObjectId(assignee) : assignee,
     creator: req.user!.id,
+    team: typeof team === "string" ? new Types.ObjectId(team) : team,
   });
   sendResponse(
     res,

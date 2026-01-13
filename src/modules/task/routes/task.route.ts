@@ -1,10 +1,7 @@
 import { requireRole } from "@/middlewares/auth.middleware";
 
-import {
-  createTaskSchema,
-  updateTaskSchema,
-} from "../validators/task.validator";
 import { taskController } from "../controllers/task.controller";
+import { taskValidator } from "../validators/task.validator";
 import { validate } from "@/middlewares/validate.middleware";
 import { asyncHandler } from "@/handlers/async.handler";
 import express from "express";
@@ -14,8 +11,8 @@ const router = express.Router();
 router.get("/task-list", asyncHandler(taskController.getTaskList));
 
 router.post(
-  "/create-task",
-  validate(createTaskSchema),
+  "/create-task/:teamId",
+  validate(taskValidator.taskSchema),
   asyncHandler(taskController.createTask),
 );
 
@@ -28,8 +25,8 @@ router.delete(
 );
 
 router.put(
-  "/update-task",
-  validate(updateTaskSchema),
+  "/update-task/:teamId",
+  validate(taskValidator.taskSchema),
   asyncHandler(taskController.updateTask),
 );
 

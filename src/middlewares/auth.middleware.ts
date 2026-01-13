@@ -56,6 +56,7 @@ export const requireRole =
         : // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (team.owner as any).toString() === String(req.user.id);
 
+          // console.log("inside requiredRole",isOwner);
     if (!isOwner) {
       return next(new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden"));
     }
