@@ -17,7 +17,6 @@ const LoginSchema = z.object({
   }),
 });
 
-
 const seedRegisterSchema = z.object({
   body: z.object({
     users: z.array(
@@ -30,7 +29,9 @@ const seedRegisterSchema = z.object({
   }),
 });
 
-export type TSeedRegisterInput = z.infer<typeof seedRegisterSchema>["body"]["users"][number];
+export type TSeedRegisterInput = z.infer<
+  typeof seedRegisterSchema
+>["body"]["users"][number];
 export type TLoginInput = z.infer<typeof LoginSchema>["body"];
 export type TRegisterInput = z.infer<typeof registerSchema>["body"];
 
@@ -38,5 +39,5 @@ export type TRegisterInput = z.infer<typeof registerSchema>["body"];
 export const authValidator = {
   registerSchema,
   LoginSchema,
-  seedRegisterSchema
+  seedRegisterSchema,
 };

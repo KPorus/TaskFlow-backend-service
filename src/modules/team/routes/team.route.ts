@@ -1,5 +1,5 @@
-import { requireRole } from "@/middlewares/auth.middleware";
 import { teamController } from "../controllers/team.controller";
+import { requireRole } from "@/middlewares/auth.middleware";
 import { asyncHandler } from "@/handlers/async.handler";
 import express from "express";
 

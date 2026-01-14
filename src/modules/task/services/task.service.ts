@@ -4,7 +4,7 @@ import { AppError } from "@/types/error.type";
 import { Task } from "../models/task.model";
 import { ITask } from "../types/task.types";
 import { Types } from "mongoose";
-
+import { io } from "@/server";
 const createTask = async (data: Partial<ITask>) => {
   let user;
   if (data!.assignee) {
@@ -15,6 +15,11 @@ const createTask = async (data: Partial<ITask>) => {
   }
 
   const task = await Task.createTask(data);
+
+  if (task.team) {
+    io.to(String(task.team)).emit("taskCreated", task);
+  }
+
   return {
     message: "Task created successfully",
     task,
@@ -45,7 +50,9 @@ const assignTask = async (userId: Types.ObjectId | string) => {
 
 const deleteTask = async (id: Types.ObjectId | string) => {
   const deleted_task = await Task.deleteTask(id);
-
+  if (deleted_task?.team) {
+    io.to(String(deleted_task.team)).emit("taskDelete", deleted_task);
+  }
   return {
     message: "Task Deleted Successfully",
     task: deleted_task,
@@ -57,7 +64,9 @@ const updateTask = async (
   updateData: Partial<ITask>,
 ) => {
   const updated_task = await Task.updateTask(taskId, updateData);
-
+  if (updated_task?.team) {
+    io.to(String(updated_task.team)).emit("taskUpdate", updated_task);
+  }
   return {
     message: "Task Updated Successfully",
     task: updated_task,

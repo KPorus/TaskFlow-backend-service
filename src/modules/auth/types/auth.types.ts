@@ -4,7 +4,6 @@ import { Request } from "express";
 export interface AuthUser {
   id: Types.ObjectId;
   email: string;
-
 }
 
 export interface AuthRequest extends Request {

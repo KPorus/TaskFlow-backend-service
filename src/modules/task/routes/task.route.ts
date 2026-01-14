@@ -1,8 +1,8 @@
 import { requireRole } from "@/middlewares/auth.middleware";
 
 import { taskController } from "../controllers/task.controller";
-import { taskValidator } from "../validators/task.validator";
 import { validate } from "@/middlewares/validate.middleware";
+import { taskValidator } from "../validators/task.validator";
 import { asyncHandler } from "@/handlers/async.handler";
 import express from "express";
 

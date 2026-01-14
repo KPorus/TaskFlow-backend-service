@@ -10,7 +10,10 @@ const createTeam = async (data: {
   console.log(data.owner);
   const team = await Team.createTeam({
     name: data.name,
-    owner: typeof data.owner === "string" ? new Types.ObjectId(data.owner) : data.owner,
+    owner:
+      typeof data.owner === "string"
+        ? new Types.ObjectId(data.owner)
+        : data.owner,
   });
   return {
     message: "Team created successfully",

@@ -1,4 +1,5 @@
 Architecture Diagram Of Backend service
+
 ```mermaid
 erDiagram
     USER {

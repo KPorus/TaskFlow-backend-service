@@ -5,7 +5,6 @@ import { HTTP_STATUS_CODES } from "@utils/http-status-codes";
 import { AppError } from "@/types/error.type";
 import { User } from "../models/auth.model";
 
-
 /**
  * Register service =====================================
  */
@@ -88,7 +87,7 @@ const refreshTokens = async (refreshToken: string) => {
 
   const tokens = generateToken({
     id: user._id,
-    email: user.email
+    email: user.email,
   });
 
   return {

@@ -1,22 +1,21 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    // "rootDir": "./src",
-    "rootDir": ".",
+    "rootDir": "./src",
     "moduleResolution": "node",
     "baseUrl": "./src",
     "outDir": "./dist",
     "module": "CommonJS",
     "paths": {
-      "@/*": ["./*"],
-      "@modules/*": ["./modules/*"],
-      "@utils/*": ["./utils/*"],
-      "@helpers/*": ["./helpers/*"],
-      "@config/*": ["./config/*"],
-      "@handlers/*": ["./handlers/*"],
-      "@middlewares/*": ["./middlewares/*"],
-      "@types/*": ["./types/*"],
-      "@tests/*": ["./tests/*"]
+      "@/*": ["*"],
+      "@modules/*": ["modules/*"],
+      "@utils/*": ["utils/*"],
+      "@helpers/*": ["helpers/*"],
+      "@config/*": ["config/*"],
+      "@handlers/*": ["handlers/*"],
+      "@middlewares/*": ["middlewares/*"],
+      "@types/*": ["types/*"],
+      "@tests/*": ["tests/*"]
     },
     "esModuleInterop": true,
     "resolveJsonModule": true,
@@ -24,6 +23,6 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "include": ["./src/**/*", "scripts"],
+  "include": ["src/**/*", "scripts"],
   "exclude": ["node_modules"]
 }

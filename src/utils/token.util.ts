@@ -4,7 +4,7 @@ import { AppError } from "@/types/error.type";
 import { Types } from "mongoose";
 type StringValue = `${number}${"d" | "h" | "m" | "s"}`;
 export const generateToken = (
-  payload: { id: Types.ObjectId; email: string;},
+  payload: { id: Types.ObjectId; email: string },
   expiresIn: StringValue = "1d",
 ) => {
   const secret: Secret = process.env.JWT_SECRET as string;

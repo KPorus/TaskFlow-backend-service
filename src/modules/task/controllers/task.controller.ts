@@ -9,7 +9,7 @@ import { Types } from "mongoose";
 const createTask = async (req: AuthRequest, res: Response) => {
   const { title, description, dueDate, priority, assignee } =
     req.body as TTaskInput;
-  const team = req.params.teamId;
+  const team = req.params.teamId as string;
   // console.log(req.body);
   const result = await taskService.createTask({
     title,

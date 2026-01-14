@@ -17,32 +17,60 @@ export const appError = (error: AppError, response: ErrorResponse) => {
 export const zodError = (error: ZodError, response: ErrorResponse) => {
   response.code = HTTP_STATUS_CODES.BAD_REQUEST;
 
-  const formattedErrors = error.errors.map((err) => {
-    console.log(err.path[1]);
+  const formattedErrors = error.issues.map((err) => {
+    const field = err.path[1];
+
     return {
-      field: err.path[1],
+      field,
       message:
         err.path.length === 0
           ? "Request body cannot be empty"
-          : err.code === "invalid_type" && err.received === "undefined"
-            ? `${err.path[1]} is required`
+          : err.code === "invalid_type" && err.expected === "undefined"
+            ? `${String(field)} is required`
             : err.message,
       code: err.code,
     };
   });
 
-  // Create a combined message from all validation errors
   const errorMessage = formattedErrors.map((err) => err.message).join(", ");
 
   response.message = `${errorMessage}!`;
-  response.details = {
-    errors: formattedErrors,
-  };
+  response.details = { errors: formattedErrors };
 
   if (process.env.NODE_ENV === "development") {
     response.details.debug = error;
   }
 };
+
+// export const zodError = (error: ZodError, response: ErrorResponse) => {
+//   response.code = HTTP_STATUS_CODES.BAD_REQUEST;
+
+//   const formattedErrors = error.errors.map((err) => {
+//     console.log(err.path[1]);
+//     return {
+//       field: err.path[1],
+//       message:
+//         err.path.length === 0
+//           ? "Request body cannot be empty"
+//           : err.code === "invalid_type" && err.received === "undefined"
+//             ? `${err.path[1]} is required`
+//             : err.message,
+//       code: err.code,
+//     };
+//   });
+
+//   // Create a combined message from all validation errors
+//   const errorMessage = formattedErrors.map((err) => err.message).join(", ");
+
+//   response.message = `${errorMessage}!`;
+//   response.details = {
+//     errors: formattedErrors,
+//   };
+
+//   if (process.env.NODE_ENV === "development") {
+//     response.details.debug = error;
+//   }
+// };
 export const generalError = (error: Error, response: ErrorResponse) => {
   response.message = error.message;
   response.details =
