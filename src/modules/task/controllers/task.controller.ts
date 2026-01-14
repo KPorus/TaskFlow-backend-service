@@ -31,6 +31,7 @@ const createTask = async (req: AuthRequest, res: Response) => {
 
 const getTaskList = async (req: Request, res: Response) => {
   const { teamId } = req.body;
+  console.log();
   const result = await taskService.getTaskList(teamId);
   sendResponse(
     res,

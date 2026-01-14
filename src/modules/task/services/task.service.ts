@@ -32,7 +32,7 @@ const createTask = async (data: Partial<ITask>) => {
 
 const getTaskList = async (teamId: Types.ObjectId | string) => {
   const tasks = await Task.findTaskList(teamId);
-  if (!tasks) {
+  if (!tasks || tasks.length == 0) {
     throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "No tasks found for team");
   }
   return {

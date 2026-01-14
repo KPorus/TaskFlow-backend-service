@@ -8,7 +8,7 @@ import express from "express";
 
 const router = express.Router();
 
-router.get("/task-list", asyncHandler(taskController.getTaskList));
+router.post("/task-list", asyncHandler(taskController.getTaskList));
 
 router.post(
   "/create-task/:teamId",
