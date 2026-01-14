@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const taskSchema = z.object({
   body: z.object({
-    title: z.string().min(1, "Title is required"),
+    title: z.string().optional(),
     description: z.string().optional(),
     status: z.nativeEnum(TaskStatus).optional(),
     priority: z.nativeEnum(TaskPriority).optional(),
