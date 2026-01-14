@@ -79,8 +79,12 @@ const start = async () => {
   try {
     await connectDB();
 
-    app.listen(port, () => {
-      console.log(`Server is running on localhost:${port}/api/v1`);
+    // app.listen(port, () => {
+    //   console.log(`Server is running on localhost:${port}/api/v1`);
+    // });
+
+    httpServer.listen(port, () => {
+      console.log(`Server listening on port ${port}`);
     });
   } catch (error: unknown) {
     console.error(error);
