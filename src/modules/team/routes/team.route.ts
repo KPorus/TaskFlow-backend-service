@@ -27,7 +27,7 @@ router.put(
 
 // Delete team
 router.delete(
-  "/:teamId",
+  "/delete-team",
   requireRole(),
   asyncHandler(teamController.deleteTeam),
 );

@@ -62,10 +62,10 @@ const removeMember = async (
 };
 
 const deleteTeam = async (id: string) => {
-  const deleted_user = await Team.deleteTeam(id);
+  const deleted_user = await Team.deleteTeam(new Types.ObjectId(id));
 
   return {
-    message: "Account Deleted Successfully",
+    message: "Team Deleted Successfully",
     user: deleted_user,
   };
 };

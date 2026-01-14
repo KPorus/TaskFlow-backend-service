@@ -57,8 +57,9 @@ const removeMember = async (req: AuthRequest, res: Response) => {
   );
 };
 const deleteTeam = async (req: Request, res: Response) => {
-  const { id } = req.body;
-  const result = await teamService.deleteTeam(id);
+  const { teamId } = req.body as { teamId: string };
+  // console.log(teamId);
+  const result = await teamService.deleteTeam(teamId);
   sendResponse(
     res,
     result,

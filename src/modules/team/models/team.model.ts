@@ -14,7 +14,7 @@ export interface TeamModelType extends Model<TeamDocument> {
     teamId: Types.ObjectId | string,
     memberId: Types.ObjectId | string,
   ): Promise<TeamDocument | null>;
-  deleteTeam(id: string): Promise<TeamDocument | null>;
+  deleteTeam(id: Types.ObjectId | string): Promise<TeamDocument | null>;
   addmember(
     teamId: Types.ObjectId | string,
     member: { user: Types.ObjectId | string },
@@ -93,7 +93,8 @@ TeamSchema.statics.removeMember = async function (
   );
 };
 
-TeamSchema.statics.deleteTeam = async function (id: string) {
-  return await this.findByIdAndDelete(id);
+TeamSchema.statics.deleteTeam = async function (id: Types.ObjectId | string) {
+  const team = await this.findById({ _id: id });
+  if (team) return await this.deleteOne({ _id: id });
 };
 export const Team = model<TeamDocument, TeamModelType>("Team", TeamSchema);
