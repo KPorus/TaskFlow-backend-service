@@ -13,7 +13,8 @@ export interface TeamModelType extends Model<TeamDocument> {
     teamId: Types.ObjectId | string,
     memberId: Types.ObjectId | string,
   ): Promise<TeamDocument | null>;
-  deleteTeam(id: Types.ObjectId | string): Promise<TeamDocument | null>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  deleteTeam(id: Types.ObjectId | string): any;
   addmember(
     teamId: Types.ObjectId | string,
     member: { user: Types.ObjectId | string },

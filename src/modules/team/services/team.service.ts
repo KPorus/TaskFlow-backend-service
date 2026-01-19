@@ -62,11 +62,14 @@ const removeMember = async (
 };
 
 const deleteTeam = async (id: string) => {
-  const deleted_user = await Team.deleteTeam(new Types.ObjectId(id));
+  const result = await Team.deleteTeam(new Types.ObjectId(id)); // { acknowledged, deletedCount }
 
+  if (result.deletedCount && result.deletedCount > 0) {
+    io.to(id).emit("teamDeleted", { teamId: id });
+  }
   return {
     message: "Team Deleted Successfully",
-    user: deleted_user,
+    user: result,
   };
 };
 export const teamService = {
