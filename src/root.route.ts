@@ -1,5 +1,9 @@
+import { notificationRouter } from "./modules/notification/routes/notification.route";
+import { dashboardRouter } from "./modules/dashboard/routes/dashboard.route";
+import { activityRouter } from "./modules/activity/routes/activity.route";
+import { projectRouter } from "./modules/project/routes/project.route";
+import { commentRouter } from "./modules/comment/routes/comment.route";
 import { authenticateJWT } from "@/middlewares/auth.middleware";
-import { teamRouter } from "./modules/team/routes/team.route";
 import { taskRouter } from "./modules/task/routes/task.route";
 import { internalRouter } from "./modules/auth/internal";
 import { authRouter } from "./modules/auth/routes";
@@ -8,26 +12,14 @@ import { Router } from "express";
 const router = Router();
 
 const moduleRoutes = [
-  {
-    protected: false,
-    path: "/auth",
-    module: authRouter,
-  },
-  {
-    protected: false,
-    path: "/auth/internal",
-    module: internalRouter,
-  },
-  {
-    protected: true,
-    path: "/team",
-    module: teamRouter,
-  },
-  {
-    protected: true,
-    path: "/task",
-    module: taskRouter,
-  },
+  { protected: false, path: "/auth", module: authRouter },
+  { protected: false, path: "/auth/internal", module: internalRouter },
+  { protected: true, path: "/project", module: projectRouter },
+  { protected: true, path: "/task", module: taskRouter },
+  { protected: true, path: "/activity", module: activityRouter },
+  { protected: true, path: "/dashboard", module: dashboardRouter },
+  { protected: true, path: "/comment", module: commentRouter },
+  { protected: true, path: "/notification", module: notificationRouter },
 ];
 
 moduleRoutes.forEach((route) => {

@@ -1,164 +1,77 @@
 # TaskFlow Backend Service
 
-## Project description
-
-The Task Monitor Backend Service is a **RESTful** API for creating, updating, and monitoring tasks, designed to power a task or productivity application backend, such as Jira. It is built with TypeScript and Node.js and is designed to be easily deployable ( Render) and simple to extend with new features. It is structured as a modern TypeScript/Node.js service with environment-based configuration, linting, and deployment support already wired in.
-
-This project follows a **team-scoped role** model for authorization, rather than defining different global user types.
-
-- A single type of user account exists for everyone in the system (no separate “global admin” or “org user” types).
-- Any authenticated user can create a team and automatically becomes the **owner** of that team.
-- The same user can belong to multiple teams simultaneously, with a different role in each team (owner in Team A, admin in Team B, member in Team C).
-- Roles such as **owner**, **admin**, and **member** are always defined **per team**, not globally.
-
-This approach is flexible and scalable and matches how most modern collaboration tools and Jira‑style project management systems structure permissions.
-
-### Team‑scoped permissions
-
-All key operations are authorized by checking the user’s role **within the specific team**:
-
-- **Team management**
-
-  - Create team: Any authenticated user can create a team and becomes its owner.
-  - Add/remove team member: Allowed for team owners/admins.
-  - Delete team: Restricted to team owners (and optionally admins), with safeguards if active tasks exist.
-
-- **Task management**
-
-  - Create task: Team members can create tasks within teams they belong to.
-  - Update/delete task: Restricted to the task’s assignee or users with sufficient role in that team (e.g. owner/admin).
-  - Assign task: Owners/admins can assign tasks to any team member; optional rules can allow self-assignment for members.
-
-- **Listing and querying**
-  - List teams: Returns teams where the user has any role (owner/admin/member).
-  - List users: Returns users within a specific team for assignment and collaboration.
-  - List tasks: Returns tasks scoped to teams the user belongs to, with filters by status, assignee, and other fields.
-
-This model keeps the global user concept simple and concentrates authorization logic at the team level, which is easier to reason about and extend over time.
-
-## Objectives
-
-- Provide a clean, typed backend API for managing and monitoring tasks
-- Offer a structure that is easy to extend with new modules (auth, task, teams)
-- Support reliable local development with environment-based configuration and automated testing
+REST API for the EAP 4.0 Smart Project & Task Collaboration System.
 
 ## Features
 
-These requirements describe a Jira‑style team and task management backend with authentication and token refresh, centered around teams, users, and tasks.
+- **Authentication**: Email/password signup & login, JWT access tokens, refresh token cookies
+- **RBAC**: Admin, Project Manager, Team Member roles
+- **Projects**: CRUD with name, description, deadline, status (Active / Completed / On Hold)
+- **Tasks**: Kanban statuses, priorities, assignees, validation (duplicate titles, past deadlines, completed reassignment)
+- **Dashboard**: KPIs, project summaries, workload, charts, upcoming deadlines
+- **Activity log**: Recent system events
+- **Comments**: Flat task comments
+- **Notifications**: Persisted + Socket.IO real-time delivery
+- **Search & filter**: Tasks by status, priority, assignee, deadline, pagination
 
-### Domain entities
+## Setup
 
-- **User**: Represents an authenticated account that can belong to teams, create tasks, and be assigned work.
-- **Team**: A named group of users for organizing work (squads, projects, departments) similar to Jira projects/boards.
-- **Task/Issue**: A unit of work (ticket) that can be created, assigned to users/teams, tracked through statuses, and updated over time.
+```bash
+pnpm install
+cp .env.example .env
+# Set MONGODB_URI and JWT_SECRET
+pnpm run seed
+pnpm run start:dev
+```
 
-### User and team features
+Server runs at `http://localhost:5000/api/v1`.
 
-- **Create team**: Create a new team with a name, optional description, and initial owner/maintainer.
-- **Add team member**: Add existing users to a team with roles (member, admin) to control permissions.
-- **Remove team member**: Detach a user from a team while preserving their historical task activity.
-- **Delete team**: Soft or hard delete a team; optionally restrict deletion if it still has active tasks.
+## Environment Variables
 
-### Task management features
+| Variable          | Description                           |
+| ----------------- | ------------------------------------- |
+| `PORT`            | Server port (default 5000)            |
+| `MONGODB_URI`     | MongoDB connection string             |
+| `JWT_SECRET`      | Secret for signing JWTs               |
+| `CLIENT_ECOM_URL` | Frontend origin for CORS (production) |
+| `NODE_ENV`        | `development` or `production`         |
 
-- **Create task**: Create tasks within a team (or globally), including fields like title, description, status, priority, and due date.
-- **Update task**: Edit task content, status, assignee, and other fields, respecting permissions and workflow rules.
-- **Delete task**: Remove or archive tasks; optionally enforce constraints (only admins can permanently delete).
-- **Assign task**: Assign tasks to specific users (and optionally to a team) to mirror Jira’s assignee behavior.
-- **List task**: List tasks with filters by team, assignee, status, priority, and search text, plus pagination.
+## Demo Credentials
 
-### Listing and querying
+| Role            | Email               | Password   |
+| --------------- | ------------------- | ---------- |
+| Admin           | admin@taskflow.com  | Admin@123  |
+| Project Manager | pm@taskflow.com     | Pm@123     |
+| Team Member     | member@taskflow.com | Member@123 |
 
-- **List team**: Return all teams visible to the current user, with optional filters (by role, ownership).
-- **List user**: List users in a team or the entire system, possibly with search and pagination to support assignment dialogs.
-- **Jira‑like workflows**: Support To Do/In Progress/Done‑style statuses and future extension to more complex workflows.
+## API Routes
 
-### Auth and tokens
+| Prefix          | Description                          |
+| --------------- | ------------------------------------ |
+| `/auth`         | Register, login, refresh, list users |
+| `/project`      | Project CRUD, members                |
+| `/task`         | Task CRUD, filtered list             |
+| `/dashboard`    | Analytics endpoints                  |
+| `/activity`     | Recent activity feed                 |
+| `/comment`      | Task comments                        |
+| `/notification` | User notifications                   |
 
-- **Authentication**: Login and registration endpoints that issue short‑lived access tokens (JWT) after verifying credentials.
-- **Refresh token**: A secure, long‑lived refresh token flow to obtain new access tokens without forcing frequent logins, ideally with rotation and revocation support.
-- **Protected routes**: All team and task routes require a valid access token, with role checks ( only team admins can remove members).
+## Deployment
 
-## Project structure
+Build: `pnpm run build`  
+Start: `pnpm start`  
+Vercel: configured via `vercel.json`.
 
-Key files and directories in the repository
-
-- `.github/workflows/` – CI/CD workflows for automated checks (tests, lint).
-- `.husky/` – Git hooks (pre-commit, pre-push) to enforce code quality
-- `src/` – Main application source code (routes, controllers, services, models)
-- `.env.example` – Example environment variables for local development
-- `.env.test.example` – Example environment variables for running tests
-- `.gitignore` – Git ignore rules for node modules, build outputs, and secrets
-- `.prettierrc` – Prettier configuration for consistent code formatting
-- `Task_monitor.excalidraw` – Architecture/flow diagram of the backend service
-- `eslint.config.mjs` – ESLint configuration for linting TypeScript/JavaScript
-- `jest.config.json` – Jest test runner configuration
-- `package.json` – Project metadata, scripts, and dependencies
-- `package-lock.json` / `pnpm-lock.yaml` – Lockfiles for reproducible installs
-- `tsconfig.json` – TypeScript compiler options
-- `vercel.json` – Configuration for deployment to Vercel
-
-## Getting started
-
-1. Clone the repository and install dependencies:
-   ```bash
-   git clone https://github.com/KPorus/task-monitor-backend-service.git
-   cd task-monitor-backend-service
-   pnpm install
-   ```
-2. Create a `.env` file from `.env.example` and fill in the required values (database URL, ports, etc.)
-3. Run the development server:
-   ```bash
-   pnpm start:dev
-   ```
-
-Architecture Diagram of Backend Service
-
-```mermaid
-erDiagram
-    USER {
-        string _id
-        string name
-        string email
-        string password
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    TEAM {
-        string _id
-        string name
-        string ownerId
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    TEAM_MEMBER {
-        string _id
-        string teamId
-        string userId
-    }
-
-    TASK {
-        string _id
-        string title
-        string description
-        string status "TODO | IN_PROGRESS | DONE"
-        string priority "LOW | MEDIUM | HIGH"
-        string assigneeId
-        string creatorId
-        string teamId
-        datetime dueDate
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    %% Relationships
-    USER ||--o{ TEAM : "owns"
-    USER ||--o{ TEAM_MEMBER : "is"
-    TEAM ||--o{ TEAM_MEMBER : "has"
-    TEAM ||--o{ TASK : "contains"
-    USER ||--o{ TASK : "creates"
-    USER ||--o{ TASK : "assigned_to"
+## Module Structure
 
 ```
+src/modules/{auth,project,task,dashboard,activity,comment,notification}/
+  controllers/
+  services/
+  routes/
+  models/
+  validators/
+  types/
+```
+
+Shared helpers: `permission.helper.ts`, `task-validation.helper.ts`, `activity.helper.ts`.

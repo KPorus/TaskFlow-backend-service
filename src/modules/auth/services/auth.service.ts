@@ -1,79 +1,106 @@
 import { TLoginInput, TRegisterInput } from "../validators/auth.validator";
+
 import { hashPassword, validatePassword } from "@/helpers/auth.helper";
+
 import { generateToken, verifyToken } from "@/utils/token.util";
+
 import { HTTP_STATUS_CODES } from "@utils/http-status-codes";
+
+import { UserRole } from "../types/auth.types";
+
 import { AppError } from "@/types/error.type";
+
 import { User } from "../models/auth.model";
+
 import { Types } from "mongoose";
 
-/**
- * Register service =====================================
- */
 const register = async (data: TRegisterInput) => {
   const hashedPassword = await hashPassword(data.password);
+
   const user = await User.createUser({
     name: data.name,
+
     email: data.email,
+
     password: hashedPassword,
+
+    role: UserRole.TEAM_MEMBER,
   });
-  // console.log(user);
+
   return {
     message: `${user.name} Signup successful`,
+
     user: {
       id: user._id,
+
       email: user.email,
+
+      name: user.name,
+
+      role: user.role,
     },
   };
 };
 
-/**
- * Login service =====================================
- */
-
 const login = async (data: TLoginInput) => {
   const existing = await User.findByEmail(data.email);
+
   if (!existing) {
     throw new AppError(HTTP_STATUS_CODES.UNAUTHORIZED, "Invalid email");
   }
 
   const isPasswordValid = await validatePassword(
     data.password,
+
     existing.password,
   );
+
   if (!isPasswordValid) {
     throw new AppError(HTTP_STATUS_CODES.UNAUTHORIZED, "Invalid password");
   }
 
   const token = generateToken({
     id: existing._id,
+
     email: existing.email,
+
+    role: existing.role,
   });
 
   return {
     message: `${existing.name} Login successful`,
+
     accessToken: token.acessToken,
+
     refreshToken: token.refreshToken,
+
     user: {
       id: existing._id,
+
       email: existing.email,
+
+      name: existing.name,
+
+      role: existing.role,
     },
   };
 };
 
-/**
- * Refresh Token =====================================
- */
 const refreshTokens = async (refreshToken: string) => {
   if (!refreshToken) {
     throw new AppError(
       HTTP_STATUS_CODES.UNAUTHORIZED,
+
       "Refresh token is missing",
     );
   }
 
   const payload = verifyToken(refreshToken) as {
     id: string;
+
     email: string;
+
+    role: UserRole;
   };
 
   if (!payload) {
@@ -88,30 +115,35 @@ const refreshTokens = async (refreshToken: string) => {
 
   const tokens = generateToken({
     id: user._id,
+
     email: user.email,
+
+    role: user.role,
   });
 
   return {
     accessToken: tokens.acessToken,
+
     refreshToken: tokens.refreshToken,
   };
 };
 
-// all user
 const getAllUsers = async (userId: Types.ObjectId | string) => {
   const users = await User.findAllUser(new Types.ObjectId(userId));
-  if (!users || users.length == 0) {
-    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Not Users Found");
-  }
+
   return {
     messages: "Users found",
-    users,
+
+    users: users ?? [],
   };
 };
 
 export const authService = {
   login,
+
   register,
+
   refreshTokens,
+
   getAllUsers,
 };

@@ -29,8 +29,12 @@ export const io = new SocketIOServer(httpServer, {
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  socket.on("joinTeam", (teamId: string) => {
-    socket.join(teamId);
+  socket.on("joinProject", (projectId: string) => {
+    socket.join(projectId);
+  });
+
+  socket.on("joinUser", (userId: string) => {
+    socket.join(`user:${userId}`);
   });
 
   socket.on("disconnect", () => {
