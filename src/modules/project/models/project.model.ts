@@ -7,9 +7,13 @@ export interface ProjectModelType extends Model<ProjectDocument> {
   findMemberProjects(
     userId: Types.ObjectId | string,
   ): Promise<ProjectDocument[]>;
+  findVisibleProjects(
+    userId: Types.ObjectId | string,
+  ): Promise<ProjectDocument[]>;
+  findAllProjects(): Promise<ProjectDocument[]>;
   findOwnerProjects(
     ownerId: Types.ObjectId | string,
-  ): Promise<ProjectDocument | null>;
+  ): Promise<ProjectDocument[]>;
   createProject(data: Partial<ProjectDocument>): Promise<ProjectDocument>;
   updateProject(
     projectId: Types.ObjectId | string,
@@ -64,10 +68,25 @@ ProjectSchema.statics.findMemberProjects = async function (
   );
 };
 
+ProjectSchema.statics.findVisibleProjects = async function (
+  userId: Types.ObjectId | string,
+) {
+  return await this.find({
+    $or: [{ owner: userId }, { "members.user": userId }],
+  }).populate("members.user", "name email role");
+};
+
+ProjectSchema.statics.findAllProjects = async function () {
+  return await this.find().populate("members.user", "name email role");
+};
+
 ProjectSchema.statics.findOwnerProjects = async function (
   ownerId: Types.ObjectId | string,
 ) {
-  return await this.find({ owner: ownerId });
+  return await this.find({ owner: ownerId }).populate(
+    "members.user",
+    "name email role",
+  );
 };
 
 ProjectSchema.statics.createProject = async function (

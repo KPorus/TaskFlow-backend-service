@@ -6,7 +6,7 @@ import { generateToken, verifyToken } from "@/utils/token.util";
 
 import { HTTP_STATUS_CODES } from "@utils/http-status-codes";
 
-import { UserRole } from "../types/auth.types";
+import { UserRole, normalizeUserRole } from "../types/auth.types";
 
 import { AppError } from "@/types/error.type";
 
@@ -24,21 +24,27 @@ const register = async (data: TRegisterInput) => {
 
     password: hashedPassword,
 
-    role: UserRole.TEAM_MEMBER,
+    role: UserRole.USER,
+  });
+
+  const profile = {
+    id: user._id,
+    email: user.email,
+    name: user.name,
+    role: normalizeUserRole(user.role),
+  };
+
+  const token = generateToken({
+    id: user._id,
+    email: user.email,
+    role: profile.role,
   });
 
   return {
     message: `${user.name} Signup successful`,
-
-    user: {
-      id: user._id,
-
-      email: user.email,
-
-      name: user.name,
-
-      role: user.role,
-    },
+    accessToken: token.acessToken,
+    refreshToken: token.refreshToken,
+    user: profile,
   };
 };
 
@@ -64,7 +70,7 @@ const login = async (data: TLoginInput) => {
 
     email: existing.email,
 
-    role: existing.role,
+    role: normalizeUserRole(existing.role),
   });
 
   return {
@@ -81,7 +87,7 @@ const login = async (data: TLoginInput) => {
 
       name: existing.name,
 
-      role: existing.role,
+      role: normalizeUserRole(existing.role),
     },
   };
 };
@@ -118,7 +124,7 @@ const refreshTokens = async (refreshToken: string) => {
 
     email: user.email,
 
-    role: user.role,
+    role: normalizeUserRole(user.role),
   });
 
   return {
@@ -138,6 +144,14 @@ const getAllUsers = async (userId: Types.ObjectId | string) => {
   };
 };
 
+const getUsersForInvite = async (userId: Types.ObjectId | string) => {
+  const users = await User.findAllUser(new Types.ObjectId(userId));
+  return {
+    messages: "Users found",
+    users: users ?? [],
+  };
+};
+
 export const authService = {
   login,
 
@@ -146,4 +160,6 @@ export const authService = {
   refreshTokens,
 
   getAllUsers,
+
+  getUsersForInvite,
 };

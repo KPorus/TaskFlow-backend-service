@@ -16,7 +16,7 @@ const userSchema = new Schema<AuthType, AuthModelType>(
     role: {
       type: String,
       enum: Object.values(UserRole),
-      default: UserRole.TEAM_MEMBER,
+      default: UserRole.USER,
     },
   },
   { timestamps: true },

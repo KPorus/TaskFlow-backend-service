@@ -14,7 +14,10 @@ export interface ActivityDocument {
 
 export interface ActivityModelType extends Model<ActivityDocument> {
   createActivity(data: Partial<ActivityDocument>): Promise<ActivityDocument>;
-  getRecent(limit: number): Promise<ActivityDocument[]>;
+  getRecent(
+    limit: number,
+    projectIds?: Types.ObjectId[],
+  ): Promise<ActivityDocument[]>;
 }
 
 const ActivitySchema = new Schema<ActivityDocument, ActivityModelType>(
@@ -34,8 +37,13 @@ ActivitySchema.statics.createActivity = async function (
   return await this.create(data);
 };
 
-ActivitySchema.statics.getRecent = async function (limit: number) {
-  return await this.find()
+ActivitySchema.statics.getRecent = async function (
+  limit: number,
+  projectIds?: Types.ObjectId[],
+) {
+  const filter =
+    projectIds && projectIds.length > 0 ? { project: { $in: projectIds } } : {};
+  return await this.find(filter)
     .sort({ createdAt: -1 })
     .limit(limit)
     .populate("actor", "name email");

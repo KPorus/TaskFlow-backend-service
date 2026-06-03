@@ -8,16 +8,11 @@ export type ProjectAction =
   | "create_task"
   | "delete_task"
   | "assign_task"
-  | "update_task";
+  | "update_task"
+  | "view";
 
 export const isAdmin = (user?: AuthUser): boolean =>
   user?.role === UserRole.ADMIN;
-
-export const isProjectManager = (user?: AuthUser): boolean =>
-  user?.role === UserRole.PROJECT_MANAGER;
-
-export const isTeamMember = (user?: AuthUser): boolean =>
-  user?.role === UserRole.TEAM_MEMBER;
 
 export const isProjectOwner = (
   project: { owner: Types.ObjectId | string | { toString(): string } },
@@ -49,19 +44,17 @@ export async function checkProjectAccess(
   const member = isProjectMember(project, userId);
   const owner = isProjectOwner(project, userId);
 
+  if (!member && !owner) return false;
+
   switch (action) {
     case "manage":
-      return isProjectManager(user) && (owner || member);
     case "create_task":
     case "delete_task":
-      return isProjectManager(user) && (owner || member);
+      return owner;
     case "assign_task":
-      return (
-        (isProjectManager(user) && (owner || member)) ||
-        (isTeamMember(user) && member)
-      );
+    case "view":
     case "update_task":
-      return member || owner;
+      return owner || member;
     default:
       return false;
   }
@@ -80,9 +73,9 @@ export async function canUpdateTask(
   const project = await Project.findByProjectId(task.project);
   if (!project) return false;
 
-  if (isProjectManager(user) && isProjectMember(project, user.id)) return true;
+  if (isProjectOwner(project, user.id)) return true;
 
-  if (isTeamMember(user)) {
+  if (isProjectMember(project, user.id)) {
     return task.assignee != null && String(task.assignee) === String(user.id);
   }
 
@@ -94,13 +87,9 @@ export async function canDeleteTask(
   task: { project: Types.ObjectId | string },
 ): Promise<boolean> {
   if (isAdmin(user)) return true;
-  if (isTeamMember(user)) return false;
 
   const project = await Project.findByProjectId(task.project);
   if (!project) return false;
 
-  return (
-    isProjectManager(user) &&
-    (isProjectOwner(project, user.id) || isProjectMember(project, user.id))
-  );
+  return isProjectOwner(project, user.id);
 }

@@ -1,8 +1,10 @@
 import { notificationService } from "@/modules/notification/services/notification.service";
-import { isAdmin, isProjectManager } from "@/helpers/permission.helper";
 import { ActivityType } from "@/modules/activity/types/activity.types";
-import { AuthUser, UserRole } from "@/modules/auth/types/auth.types";
+import { isAdmin, isProjectOwner } from "@/helpers/permission.helper";
+import { canAccessProject } from "@/helpers/project-access.helper";
+import { Project } from "@/modules/project/models/project.model";
 import { HTTP_STATUS_CODES } from "@/utils/http-status-codes";
+import { AuthUser } from "@/modules/auth/types/auth.types";
 import { Task } from "@/modules/task/models/task.model";
 import { logActivity } from "@/helpers/activity.helper";
 import { Comment } from "../models/comment.model";
@@ -10,12 +12,30 @@ import { AppError } from "@/types/error.type";
 import { Types } from "mongoose";
 import { io } from "@/server";
 
+const assertTaskAccess = async (
+  user: AuthUser,
+  taskId: Types.ObjectId | string,
+) => {
+  const task = await Task.findById(taskId);
+  if (!task?.project) {
+    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Task not found");
+  }
+  const allowed = await canAccessProject(user, task.project);
+  if (!allowed) {
+    throw new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden");
+  }
+  return task;
+};
+
 const createComment = async (
   taskId: Types.ObjectId | string,
   authorId: Types.ObjectId | string,
   text: string,
+  user?: AuthUser,
 ) => {
-  const task = await Task.findById(taskId);
+  const task = user
+    ? await assertTaskAccess(user, taskId)
+    : await Task.findById(taskId);
   if (!task) {
     throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Task not found");
   }
@@ -56,7 +76,10 @@ const createComment = async (
   };
 };
 
-const getByTask = async (taskId: Types.ObjectId | string) => {
+const getByTask = async (taskId: Types.ObjectId | string, user?: AuthUser) => {
+  if (user) {
+    await assertTaskAccess(user, taskId);
+  }
   const comments = await Comment.findByTask(taskId);
   return {
     message: "Comments fetched",
@@ -73,11 +96,19 @@ const deleteComment = async (
     throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Comment not found");
   }
 
+  const task = await Task.findById(comment.task);
+  if (!task?.project) {
+    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Task not found");
+  }
+
+  const project = await Project.findByProjectId(task.project);
+  if (!project) {
+    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
+  }
+
   const isAuthor = String(comment.author) === String(user.id);
   const canDelete =
-    isAuthor ||
-    isAdmin(user) ||
-    (isProjectManager(user) && user.role === UserRole.PROJECT_MANAGER);
+    isAuthor || isAdmin(user) || isProjectOwner(project, user.id);
 
   if (!canDelete) {
     throw new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden");

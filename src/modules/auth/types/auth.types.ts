@@ -3,12 +3,17 @@ import { Request } from "express";
 
 export enum UserRole {
   ADMIN = "ADMIN",
-  PROJECT_MANAGER = "PROJECT_MANAGER",
-  TEAM_MEMBER = "TEAM_MEMBER",
+  USER = "USER",
 }
 
+/** Legacy JWT/DB values map to USER */
+export const normalizeUserRole = (role?: string): UserRole => {
+  if (role === UserRole.ADMIN) return UserRole.ADMIN;
+  return UserRole.USER;
+};
+
 export interface AuthUser {
-  id: Types.ObjectId;
+  id: Types.ObjectId | string;
   email: string;
   role: UserRole;
 }

@@ -6,6 +6,7 @@ import {
 import { notificationService } from "@/modules/notification/services/notification.service";
 import { canDeleteTask, canUpdateTask } from "@/helpers/permission.helper";
 import { ActivityType } from "@/modules/activity/types/activity.types";
+import { canAccessProject } from "@/helpers/project-access.helper";
 import { Project } from "@/modules/project/models/project.model";
 import { HTTP_STATUS_CODES } from "@/utils/http-status-codes";
 import { AuthUser } from "@/modules/auth/types/auth.types";
@@ -64,8 +65,14 @@ const createTask = async (data: Partial<ITask>, actor?: AuthUser) => {
   };
 };
 
-const getTaskList = async (query: TaskListQuery) => {
+const getTaskList = async (query: TaskListQuery, actor?: AuthUser) => {
   const { projectId, ...filters } = query;
+  if (actor) {
+    const allowed = await canAccessProject(actor, projectId);
+    if (!allowed) {
+      throw new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden");
+    }
+  }
   const { tasks, total } = await Task.findTaskList(projectId, filters);
   const page = filters.page ?? 1;
   const limit = filters.limit ?? 20;
@@ -81,11 +88,21 @@ const getTaskList = async (query: TaskListQuery) => {
 const assignTask = async (
   userId: Types.ObjectId | string,
   taskId: Types.ObjectId | string,
+  projectId: Types.ObjectId | string,
   actor?: AuthUser,
 ) => {
   const existing = await Task.findById(taskId);
   if (!existing) {
     throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Task not found");
+  }
+  if (String(existing.project) !== String(projectId)) {
+    throw new AppError(HTTP_STATUS_CODES.BAD_REQUEST, "Task not in project");
+  }
+  if (actor) {
+    const allowed = await canAccessProject(actor, projectId);
+    if (!allowed) {
+      throw new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden");
+    }
   }
   validateCompletedReassignment(existing, {
     assignee: new Types.ObjectId(userId),

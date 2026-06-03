@@ -8,7 +8,12 @@ import { Response } from "express";
 const create = async (req: AuthRequest, res: Response) => {
   const { taskId } = req.params as { taskId: string };
   const { text } = req.body as TCreateCommentInput;
-  const result = await commentService.createComment(taskId, req.user!.id, text);
+  const result = await commentService.createComment(
+    taskId,
+    req.user!.id,
+    text,
+    req.user,
+  );
   sendResponse(
     res,
     result,
@@ -19,7 +24,7 @@ const create = async (req: AuthRequest, res: Response) => {
 
 const list = async (req: AuthRequest, res: Response) => {
   const { taskId } = req.params as { taskId: string };
-  const result = await commentService.getByTask(taskId);
+  const result = await commentService.getByTask(taskId, req.user);
   sendResponse(
     res,
     result,

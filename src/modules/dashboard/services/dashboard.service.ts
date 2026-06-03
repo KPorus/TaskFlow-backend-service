@@ -1,18 +1,19 @@
 import {
+  getRoleOnProject,
+  getVisibleProjectIds,
+  getVisibleProjects,
+} from "@/helpers/project-access.helper";
+import {
   Task,
   TaskPriority,
   TaskStatus,
 } from "@/modules/task/models/task.model";
 import { Project } from "@/modules/project/models/project.model";
-import { Types } from "mongoose";
+import { AuthUser } from "@/modules/auth/types/auth.types";
+import { isAdmin } from "@/helpers/permission.helper";
 
-const getUserProjectIds = async (userId: Types.ObjectId | string) => {
-  const projects = await Project.findMemberProjects(userId);
-  return projects.map((p) => p._id);
-};
-
-const getStats = async (userId: Types.ObjectId | string) => {
-  const projectIds = await getUserProjectIds(userId);
+const getStats = async (user: AuthUser) => {
+  const projectIds = await getVisibleProjectIds(user);
   const now = new Date();
 
   const [
@@ -45,11 +46,12 @@ const getStats = async (userId: Types.ObjectId | string) => {
     completedTasks,
     pendingTasks,
     overdueTasks,
+    isSystemWide: isAdmin(user),
   };
 };
 
-const getProjectSummaries = async (userId: Types.ObjectId | string) => {
-  const projects = await Project.findMemberProjects(userId);
+const getProjectSummaries = async (user: AuthUser) => {
+  const projects = await getVisibleProjects(user);
 
   const summaries = await Promise.all(
     projects.map(async (project) => {
@@ -79,6 +81,11 @@ const getProjectSummaries = async (userId: Types.ObjectId | string) => {
         pendingTasks: pending,
         completionPercent,
         deadlineLabel,
+        roleOnProject: isAdmin(user)
+          ? ("ADMIN" as const)
+          : getRoleOnProject(project, user.id),
+        isOwner:
+          isAdmin(user) || getRoleOnProject(project, user.id) === "OWNER",
       };
     }),
   );
@@ -86,8 +93,8 @@ const getProjectSummaries = async (userId: Types.ObjectId | string) => {
   return summaries;
 };
 
-const getWorkload = async (userId: Types.ObjectId | string) => {
-  const projectIds = await getUserProjectIds(userId);
+const getWorkload = async (user: AuthUser) => {
+  const projectIds = await getVisibleProjectIds(user);
 
   const workload = await Task.aggregate([
     { $match: { project: { $in: projectIds }, assignee: { $exists: true } } },
@@ -124,11 +131,8 @@ const getWorkload = async (userId: Types.ObjectId | string) => {
   return workload;
 };
 
-const getUpcomingDeadlines = async (
-  userId: Types.ObjectId | string,
-  days = 7,
-) => {
-  const projectIds = await getUserProjectIds(userId);
+const getUpcomingDeadlines = async (user: AuthUser, days = 7) => {
+  const projectIds = await getVisibleProjectIds(user);
   const now = new Date();
   const future = new Date();
   future.setDate(future.getDate() + days);
@@ -145,8 +149,8 @@ const getUpcomingDeadlines = async (
   return tasks;
 };
 
-const getHighPriority = async (userId: Types.ObjectId | string) => {
-  const projectIds = await getUserProjectIds(userId);
+const getHighPriority = async (user: AuthUser) => {
+  const projectIds = await getVisibleProjectIds(user);
 
   const tasks = await Task.find({
     project: { $in: projectIds },
@@ -160,8 +164,8 @@ const getHighPriority = async (userId: Types.ObjectId | string) => {
   return tasks;
 };
 
-const getCharts = async (userId: Types.ObjectId | string) => {
-  const projectIds = await getUserProjectIds(userId);
+const getCharts = async (user: AuthUser) => {
+  const projectIds = await getVisibleProjectIds(user);
 
   const [tasksByPriority, taskStatusDistribution, projectProgress] =
     await Promise.all([

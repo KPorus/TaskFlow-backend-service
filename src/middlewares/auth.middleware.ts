@@ -2,10 +2,12 @@ import {
   AuthRequest,
   AuthUser,
   UserRole,
+  normalizeUserRole,
 } from "@/modules/auth/types/auth.types";
 import { checkProjectAccess, ProjectAction } from "@/helpers/permission.helper";
 import { Project } from "@/modules/project/models/project.model";
 import { HTTP_STATUS_CODES } from "../utils/http-status-codes";
+import { Task } from "@/modules/task/models/task.model";
 import { Response, NextFunction } from "express";
 import { AppError } from "../types/error.type";
 import jwt from "jsonwebtoken";
@@ -33,7 +35,8 @@ export const authenticateJWT = (
     ) as AuthUser;
     req.user = {
       ...decoded,
-      role: decoded.role ?? UserRole.TEAM_MEMBER,
+      id: String(decoded.id),
+      role: normalizeUserRole(decoded.role),
     };
     next();
   } catch (error: unknown) {
@@ -84,6 +87,53 @@ export const requireProjectAccess =
       return next(new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden"));
     }
 
+    return next();
+  };
+
+export const requireTaskProjectAccessFromBody =
+  (action: ProjectAction = "assign_task") =>
+  async (req: AuthRequest, _res: Response, next: NextFunction) => {
+    const taskId = req.body?.taskId;
+    if (!taskId) {
+      return next(
+        new AppError(HTTP_STATUS_CODES.BAD_REQUEST, "Task ID required"),
+      );
+    }
+    const task = await Task.findById(taskId);
+    if (!task?.project) {
+      return next(new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Task not found"));
+    }
+    if (!req.user?.id) {
+      return next(
+        new AppError(HTTP_STATUS_CODES.UNAUTHORIZED, "User not found in token"),
+      );
+    }
+    req.body.projectId = String(task.project);
+    const allowed = await checkProjectAccess(req.user, task.project, action);
+    if (!allowed) {
+      return next(new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden"));
+    }
+    return next();
+  };
+
+export const requireProjectAccessFromBody =
+  (action: ProjectAction = "update_task") =>
+  async (req: AuthRequest, _res: Response, next: NextFunction) => {
+    const projectId = req.body?.projectId;
+    if (!projectId) {
+      return next(
+        new AppError(HTTP_STATUS_CODES.BAD_REQUEST, "Project ID required"),
+      );
+    }
+    if (!req.user?.id) {
+      return next(
+        new AppError(HTTP_STATUS_CODES.UNAUTHORIZED, "User not found in token"),
+      );
+    }
+    const allowed = await checkProjectAccess(req.user, projectId, action);
+    if (!allowed) {
+      return next(new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden"));
+    }
     return next();
   };
 

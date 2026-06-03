@@ -7,7 +7,7 @@ import { AuthRequest } from "@/modules/auth/types/auth.types";
 import { HTTP_STATUS_CODES } from "@/utils/http-status-codes";
 import { sendResponse } from "@/handlers/response.handler";
 import { taskService } from "../services/task.service";
-import { Request, Response } from "express";
+import { Response } from "express";
 import { Types } from "mongoose";
 
 const createTask = async (req: AuthRequest, res: Response) => {
@@ -23,7 +23,7 @@ const createTask = async (req: AuthRequest, res: Response) => {
       status,
       assignee:
         typeof assignee === "string" ? new Types.ObjectId(assignee) : assignee,
-      creator: req.user!.id,
+      creator: new Types.ObjectId(String(req.user!.id)),
       project: new Types.ObjectId(projectId),
     },
     req.user,
@@ -36,9 +36,9 @@ const createTask = async (req: AuthRequest, res: Response) => {
   );
 };
 
-const getTaskList = async (req: Request, res: Response) => {
+const getTaskList = async (req: AuthRequest, res: Response) => {
   const body = req.body as TTaskListInput;
-  const result = await taskService.getTaskList(body);
+  const result = await taskService.getTaskList(body, req.user);
   sendResponse(
     res,
     result,
@@ -48,8 +48,8 @@ const getTaskList = async (req: Request, res: Response) => {
 };
 
 const assignTask = async (req: AuthRequest, res: Response) => {
-  const { id, taskId } = req.body;
-  const result = await taskService.assignTask(id, taskId, req.user);
+  const { id, taskId, projectId } = req.body;
+  const result = await taskService.assignTask(id, taskId, projectId, req.user);
   sendResponse(res, result, HTTP_STATUS_CODES.OK, "Task Assigned Successfully");
 };
 

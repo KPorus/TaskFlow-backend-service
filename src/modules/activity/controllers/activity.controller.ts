@@ -5,8 +5,8 @@ import { sendResponse } from "@/handlers/response.handler";
 import { Response } from "express";
 
 const getRecent = async (req: AuthRequest, res: Response) => {
-  const limit = Math.min(Number(req.query.limit) || 10, 10);
-  const result = await activityService.getRecent(limit);
+  const limit = Math.min(Number(req.query.limit) || 10, 50);
+  const result = await activityService.getRecent(req.user!, limit);
   sendResponse(
     res,
     result,

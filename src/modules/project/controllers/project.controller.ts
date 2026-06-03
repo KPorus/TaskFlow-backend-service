@@ -34,7 +34,7 @@ const createProject = async (req: AuthRequest, res: Response) => {
 const getUserProjects = async (req: AuthRequest, res: Response) => {
   const status = req.query.status as ProjectStatus | undefined;
   const search = req.query.search as string | undefined;
-  const result = await projectService.getUserProjects(req.user!.id, {
+  const result = await projectService.getUserProjects(req.user!, {
     status,
     search,
   });

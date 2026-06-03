@@ -1,9 +1,13 @@
-import { isAdmin, isProjectManager } from "@/helpers/permission.helper";
+import {
+  getRoleOnProject,
+  getVisibleProjects,
+} from "@/helpers/project-access.helper";
 import { ActivityType } from "@/modules/activity/types/activity.types";
 import { HTTP_STATUS_CODES } from "@/utils/http-status-codes";
 import { AuthUser } from "@/modules/auth/types/auth.types";
 import { logActivity } from "@/helpers/activity.helper";
 import { ProjectStatus } from "../types/project.types";
+import { isAdmin } from "@/helpers/permission.helper";
 import { Project } from "../models/project.model";
 import { AppError } from "@/types/error.type";
 import { Types } from "mongoose";
@@ -19,13 +23,6 @@ const createProject = async (
   },
   actor?: AuthUser,
 ) => {
-  if (actor && !isAdmin(actor) && !isProjectManager(actor)) {
-    throw new AppError(
-      HTTP_STATUS_CODES.FORBIDDEN,
-      "Only admins and project managers can create projects",
-    );
-  }
-
   const project = await Project.createProject({
     name: data.name,
     description: data.description,
@@ -47,15 +44,18 @@ const createProject = async (
 
   return {
     message: "Project created successfully",
-    project,
+    project: {
+      ...project.toObject(),
+      roleOnProject: "OWNER" as const,
+    },
   };
 };
 
 const getUserProjects = async (
-  userId: Types.ObjectId | string,
+  user: AuthUser,
   filters?: { status?: ProjectStatus; search?: string },
 ) => {
-  let projects = await Project.findMemberProjects(userId);
+  let projects = await getVisibleProjects(user);
   if (!projects || projects.length === 0) {
     return { message: "User projects fetched successfully", projects: [] };
   }
@@ -66,9 +66,17 @@ const getUserProjects = async (
     const q = filters.search.toLowerCase();
     projects = projects.filter((p) => p.name.toLowerCase().includes(q));
   }
+
+  const projectsWithRole = projects.map((p) => ({
+    ...p.toObject(),
+    roleOnProject: isAdmin(user)
+      ? ("ADMIN" as const)
+      : getRoleOnProject(p, user.id),
+  }));
+
   return {
     message: "User projects fetched successfully",
-    projects,
+    projects: projectsWithRole,
   };
 };
 
