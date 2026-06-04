@@ -114,10 +114,14 @@ ProjectSchema.statics.addMember = async function (
   projectId: Types.ObjectId | string,
   member: { user: Types.ObjectId | string },
 ) {
-  return await this.findByIdAndUpdate(
+  await this.findByIdAndUpdate(
     projectId,
     { $push: { members: member } },
     { new: true },
+  );
+  return await this.findById(projectId).populate(
+    "members.user",
+    "name email role",
   );
 };
 
@@ -125,10 +129,14 @@ ProjectSchema.statics.removeMember = async function (
   projectId: Types.ObjectId | string,
   memberId: Types.ObjectId | string,
 ) {
-  return await this.findByIdAndUpdate(
+  await this.findByIdAndUpdate(
     projectId,
     { $pull: { members: { user: memberId } } },
     { new: true },
+  );
+  return await this.findById(projectId).populate(
+    "members.user",
+    "name email role",
   );
 };
 

@@ -82,7 +82,11 @@ const addMember = async (req: AuthRequest, res: Response) => {
 
 const removeMember = async (req: AuthRequest, res: Response) => {
   const { projectId, memberId } = req.body;
-  const result = await projectService.removeMember(projectId, memberId);
+  const result = await projectService.removeMember(
+    projectId,
+    memberId,
+    req.user,
+  );
   sendResponse(
     res,
     result,

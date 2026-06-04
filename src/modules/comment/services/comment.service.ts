@@ -1,4 +1,7 @@
-import { notificationService } from "@/modules/notification/services/notification.service";
+import {
+  notifyTaskStakeholders,
+  projectLink,
+} from "@/helpers/notification-recipients.helper";
 import { ActivityType } from "@/modules/activity/types/activity.types";
 import { isAdmin, isProjectOwner } from "@/helpers/permission.helper";
 import { canAccessProject } from "@/helpers/project-access.helper";
@@ -62,13 +65,15 @@ const createComment = async (
     task: task._id,
   });
 
-  if (task.assignee && String(task.assignee) !== String(authorId)) {
-    await notificationService.notify(String(task.assignee), {
+  await notifyTaskStakeholders(
+    task,
+    {
       type: "COMMENT_ADDED",
       message: `New comment on task "${task.title}"`,
-      link: `/dashboard/projects/${task.project}`,
-    });
-  }
+      link: projectLink(task.project!),
+    },
+    { includeAssignee: true, excludeUserId: authorId },
+  );
 
   return {
     message: "Comment created",

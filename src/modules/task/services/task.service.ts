@@ -1,9 +1,14 @@
 import {
+  notifyMany,
+  notifyProjectOwner,
+  notifyTaskStakeholders,
+  projectLink,
+} from "@/helpers/notification-recipients.helper";
+import {
   validateTaskCreate,
   validateTaskUpdate,
   validateCompletedReassignment,
 } from "@/helpers/task-validation.helper";
-import { notificationService } from "@/modules/notification/services/notification.service";
 import { canDeleteTask, canUpdateTask } from "@/helpers/permission.helper";
 import { ActivityType } from "@/modules/activity/types/activity.types";
 import { canAccessProject } from "@/helpers/project-access.helper";
@@ -52,11 +57,26 @@ const createTask = async (data: Partial<ITask>, actor?: AuthUser) => {
   }
 
   if (task.assignee) {
-    await notificationService.notify(String(task.assignee), {
-      type: "TASK_ASSIGNED",
-      message: `Task "${task.title}" assigned to you`,
-      link: `/dashboard/projects/${task.project}`,
-    });
+    const link = projectLink(task.project!);
+    const assigneeUser = await User.findById(task.assignee);
+    await notifyMany(
+      [task.assignee],
+      {
+        type: "TASK_ASSIGNED",
+        message: `Task "${task.title}" assigned to you`,
+        link,
+      },
+      { excludeUserId: actor?.id },
+    );
+    await notifyProjectOwner(
+      task.project!,
+      {
+        type: "TASK_ASSIGNED",
+        message: `Task "${task.title}" assigned to ${assigneeUser?.name ?? "a member"}`,
+        link,
+      },
+      actor?.id,
+    );
   }
 
   return {
@@ -130,11 +150,25 @@ const assignTask = async (
     });
   }
 
-  await notificationService.notify(String(userId), {
-    type: "TASK_ASSIGNED",
-    message: `Task "${tasks.title}" assigned to you`,
-    link: `/dashboard/projects/${tasks.project}`,
-  });
+  const link = projectLink(tasks.project!);
+  await notifyMany(
+    [userId],
+    {
+      type: "TASK_ASSIGNED",
+      message: `Task "${tasks.title}" assigned to you`,
+      link,
+    },
+    { excludeUserId: actor?.id },
+  );
+  await notifyProjectOwner(
+    tasks.project!,
+    {
+      type: "TASK_ASSIGNED",
+      message: `Task "${tasks.title}" assigned to ${assignee?.name ?? "a member"}`,
+      link,
+    },
+    actor?.id,
+  );
 
   return {
     message: "Task assigned successfully",
@@ -192,6 +226,45 @@ const updateTask = async (
   );
   if (updated_task?.project) {
     io.to(String(updated_task.project)).emit("taskUpdate", updated_task);
+  }
+
+  const link = projectLink(updated_task?.project ?? existing.project);
+
+  if (
+    updateData.assignee != null &&
+    String(updateData.assignee) !== String(existing.assignee ?? "")
+  ) {
+    const newAssignee = await User.findById(updateData.assignee);
+    await notifyMany(
+      [updateData.assignee],
+      {
+        type: "TASK_ASSIGNED",
+        message: `Task "${updated_task?.title ?? existing.title}" assigned to you`,
+        link,
+      },
+      { excludeUserId: user.id },
+    );
+    await notifyProjectOwner(
+      existing.project,
+      {
+        type: "TASK_ASSIGNED",
+        message: `Task "${updated_task?.title ?? existing.title}" assigned to ${newAssignee?.name ?? "a member"}`,
+        link,
+      },
+      user.id,
+    );
+  }
+
+  if (updateData.status != null && updateData.status !== existing.status) {
+    await notifyTaskStakeholders(
+      existing,
+      {
+        type: "TASK_UPDATED",
+        message: `Task "${updated_task?.title ?? existing.title}" status changed to ${updateData.status}`,
+        link,
+      },
+      { includeAssignee: false, excludeUserId: user.id },
+    );
   }
 
   if (updateData.status === TaskStatus.DONE) {
