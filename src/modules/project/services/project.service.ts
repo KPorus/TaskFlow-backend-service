@@ -4,12 +4,17 @@ import {
   projectLink,
 } from "@/helpers/notification-recipients.helper";
 import {
+  emitMembershipChanged,
+  emitProjectRoomMembership,
+} from "@/helpers/membership-events.helper";
+import {
   getRoleOnProject,
   getVisibleProjects,
 } from "@/helpers/project-access.helper";
 import { ActivityType } from "@/modules/activity/types/activity.types";
 import { HTTP_STATUS_CODES } from "@/utils/http-status-codes";
 import { AuthUser } from "@/modules/auth/types/auth.types";
+import { Task } from "@/modules/task/models/task.model";
 import { User } from "@/modules/auth/models/auth.model";
 import { logActivity } from "@/helpers/activity.helper";
 import { ProjectStatus } from "../types/project.types";
@@ -116,11 +121,15 @@ const addMember = async (
     throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
   }
 
-  if (project._id) {
-    io.to(String(project._id)).emit("projectMemberAdd", project);
-  }
-
   const memberId = String(member.user);
+  const projectIdStr = String(projectId);
+
+  emitProjectRoomMembership(projectId, "projectMemberAdd", project);
+  emitMembershipChanged(memberId, {
+    action: "ADDED",
+    projectId: projectIdStr,
+    project,
+  });
   const addedUser = await User.findById(memberId);
   const link = projectLink(projectId);
 
@@ -166,14 +175,22 @@ const removeMember = async (
 ) => {
   const removedUser = await User.findById(memberId);
   const projectBefore = await Project.findByProjectId(projectId);
+  const memberObjectId =
+    typeof memberId === "string" ? new Types.ObjectId(memberId) : memberId;
+
+  await Task.clearAssigneeForMemberInProject(projectId, memberObjectId);
+
   const project = await Project.removeMember(projectId, memberId);
   if (!project) {
     throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
   }
 
-  if (project._id) {
-    io.to(String(project._id)).emit("projectMemberRemove", project);
-  }
+  const projectIdStr = String(projectId);
+  emitProjectRoomMembership(projectId, "projectMemberRemove", project);
+  emitMembershipChanged(memberId, {
+    action: "REMOVED",
+    projectId: projectIdStr,
+  });
 
   const link = projectLink(projectId);
   const projectName = project.name ?? projectBefore?.name ?? "project";

@@ -25,6 +25,10 @@ export interface TaskModelType extends Model<TaskDocument> {
     title: string,
     excludeTaskId?: Types.ObjectId | string,
   ): Promise<TaskDocument | null>;
+  clearAssigneeForMemberInProject(
+    projectId: Types.ObjectId | string,
+    memberId: Types.ObjectId | string,
+  ): Promise<{ modifiedCount?: number }>;
 }
 
 export enum TaskStatus {
@@ -197,6 +201,16 @@ TaskSchema.statics.updateTask = async function (
   updateData: Partial<TaskDocument>,
 ) {
   return await this.findByIdAndUpdate(taskId, updateData, { new: true });
+};
+
+TaskSchema.statics.clearAssigneeForMemberInProject = async function (
+  projectId: Types.ObjectId | string,
+  memberId: Types.ObjectId | string,
+) {
+  return await this.updateMany(
+    { project: projectId, assignee: memberId },
+    { $unset: { assignee: 1 } },
+  );
 };
 
 export const Task = model<TaskDocument, TaskModelType>("Task", TaskSchema);
