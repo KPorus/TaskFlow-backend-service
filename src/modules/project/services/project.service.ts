@@ -186,6 +186,10 @@ const removeMember = async (
   }
 
   const projectIdStr = String(projectId);
+  io.to(projectIdStr).emit("memberAssigneesCleared", {
+    projectId: projectIdStr,
+    memberId: String(memberId),
+  });
   emitProjectRoomMembership(projectId, "projectMemberRemove", project);
   emitMembershipChanged(memberId, {
     action: "REMOVED",
