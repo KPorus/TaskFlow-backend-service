@@ -1,4 +1,11 @@
 import {
+  canDeleteTask,
+  canUpdateTask,
+  checkProjectAccess,
+  isProjectMember,
+  isProjectOwner,
+} from "@/helpers/permission.helper";
+import {
   notifyMany,
   notifyProjectOwner,
   notifyTaskStakeholders,
@@ -9,11 +16,6 @@ import {
   validateTaskUpdate,
   validateCompletedReassignment,
 } from "@/helpers/task-validation.helper";
-import {
-  canDeleteTask,
-  canUpdateTask,
-  checkProjectAccess,
-} from "@/helpers/permission.helper";
 import { ActivityType } from "@/modules/activity/types/activity.types";
 import { canAccessProject } from "@/helpers/project-access.helper";
 import { Project } from "@/modules/project/models/project.model";
@@ -29,16 +31,36 @@ import { Types } from "mongoose";
 import mongoose from "mongoose";
 import { io } from "@/server";
 
+const assertAssigneeIsProjectMember = (
+  project: {
+    owner: Types.ObjectId | string;
+    members: { user: Types.ObjectId | string }[];
+  },
+  assigneeId: Types.ObjectId | string,
+): void => {
+  if (
+    !isProjectOwner(project, assigneeId) &&
+    !isProjectMember(project, assigneeId)
+  ) {
+    throw new AppError(
+      HTTP_STATUS_CODES.BAD_REQUEST,
+      "Assignee must be a member of the project",
+    );
+  }
+};
+
 const createTask = async (data: Partial<ITask>, actor?: AuthUser) => {
+  const project = await Project.findById(data.project);
+  if (!project) {
+    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
+  }
+
   if (data.assignee) {
     const user = await User.findById(data.assignee);
     if (!user) {
       throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "No User found for task");
     }
-  }
-  const project = await Project.findById(data.project);
-  if (!project) {
-    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
+    assertAssigneeIsProjectMember(project, data.assignee);
   }
 
   if (actor) {
@@ -252,6 +274,18 @@ const updateTask = async (
   const allowed = await canUpdateTask(user, existing);
   if (!allowed) {
     throw new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden");
+  }
+
+  if (updateData.assignee) {
+    const project = await Project.findByProjectId(existing.project);
+    if (!project) {
+      throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
+    }
+    const assigneeUser = await User.findById(updateData.assignee);
+    if (!assigneeUser) {
+      throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "No User found for task");
+    }
+    assertAssigneeIsProjectMember(project, updateData.assignee);
   }
 
   await validateTaskUpdate(existing, updateData);

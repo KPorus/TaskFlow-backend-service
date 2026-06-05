@@ -48,9 +48,9 @@ export async function checkProjectAccess(
 
   switch (action) {
     case "manage":
-    case "create_task":
     case "delete_task":
       return owner;
+    case "create_task":
     case "assign_task":
     case "view":
     case "update_task":
@@ -73,13 +73,7 @@ export async function canUpdateTask(
   const project = await Project.findByProjectId(task.project);
   if (!project) return false;
 
-  if (isProjectOwner(project, user.id)) return true;
-
-  if (isProjectMember(project, user.id)) {
-    return task.assignee != null && String(task.assignee) === String(user.id);
-  }
-
-  return false;
+  return isProjectOwner(project, user.id) || isProjectMember(project, user.id);
 }
 
 export async function canDeleteTask(
