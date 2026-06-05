@@ -22,7 +22,9 @@ const createTask = async (req: AuthRequest, res: Response) => {
       priority,
       status,
       assignee:
-        typeof assignee === "string" ? new Types.ObjectId(assignee) : assignee,
+        typeof assignee === "string" && assignee
+          ? new Types.ObjectId(assignee)
+          : undefined,
       creator: new Types.ObjectId(String(req.user!.id)),
       project: new Types.ObjectId(projectId),
     },
@@ -64,7 +66,11 @@ const updateTask = async (req: AuthRequest, res: Response) => {
   const body = req.body as TTaskInput;
   const updateData: Record<string, unknown> = { ...body };
   if (body.dueDate) updateData.dueDate = new Date(body.dueDate);
-  if (body.assignee) updateData.assignee = new Types.ObjectId(body.assignee);
+  if (body.assignee !== undefined) {
+    updateData.assignee = body.assignee
+      ? new Types.ObjectId(body.assignee)
+      : null;
+  }
 
   const result = await taskService.updateTask(taskId, updateData, req.user!);
   sendResponse(res, result, HTTP_STATUS_CODES.OK, "Task Updated Successfully");

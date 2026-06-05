@@ -1,4 +1,6 @@
+import { canAccessProject } from "./helpers/project-access.helper";
 import { errorMiddleware } from "./middlewares/error.middleware";
+import { verifySocketToken } from "./helpers/socket-auth.helper";
 import { Server as SocketIOServer } from "socket.io";
 import { connectDB } from "./config/db.config"; //
 import express, { Application } from "express";
@@ -26,14 +28,39 @@ export const io = new SocketIOServer(httpServer, {
 });
 
 // Socket.IO connection handler
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token as string | undefined;
+  const user = verifySocketToken(token);
+  if (!user) {
+    return next(new Error("Unauthorized"));
+  }
+  socket.data.user = user;
+  next();
+});
+
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  socket.on("joinProject", (projectId: string) => {
+  socket.on("joinProject", async (projectId: string) => {
+    const user = socket.data.user;
+    if (!user?.id || !projectId) {
+      return;
+    }
+
+    const allowed = await canAccessProject(user, projectId);
+    if (!allowed) {
+      return;
+    }
+
     socket.join(projectId);
   });
 
   socket.on("joinUser", (userId: string) => {
+    const user = socket.data.user;
+    if (!user?.id || String(user.id) !== String(userId)) {
+      return;
+    }
+
     socket.join(`user:${userId}`);
   });
 

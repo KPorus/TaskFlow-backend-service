@@ -1,4 +1,5 @@
 import { ProjectDocument, ProjectStatus } from "../types/project.types";
+import { Comment } from "@/modules/comment/models/comment.model";
 import { Task } from "@/modules/task/models/task.model";
 import { Model, model, Schema, Types } from "mongoose";
 
@@ -144,9 +145,14 @@ ProjectSchema.statics.deleteProject = async function (
   id: Types.ObjectId | string,
 ) {
   const project = await this.findById({ _id: id });
+  if (!project) return { deletedCount: 0 };
+
+  const taskIds = await Task.find({ project: id }).distinct("_id");
+  if (taskIds.length > 0) {
+    await Comment.deleteMany({ task: { $in: taskIds } });
+  }
   await Task.deleteMany({ project: id });
-  if (project) return await this.deleteOne({ _id: id });
-  return { deletedCount: 0 };
+  return await this.deleteOne({ _id: id });
 };
 
 export const Project = model<ProjectDocument, ProjectModelType>(

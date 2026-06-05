@@ -7,7 +7,7 @@ const taskSchema = z.object({
     description: z.string().optional(),
     status: z.nativeEnum(TaskStatus).optional(),
     priority: z.nativeEnum(TaskPriority).optional(),
-    assignee: z.string().optional(),
+    assignee: z.string().nullable().optional(),
     dueDate: z.string().datetime().optional(),
   }),
 });
@@ -18,7 +18,7 @@ const createTaskSchema = z.object({
     description: z.string().optional(),
     status: z.nativeEnum(TaskStatus).optional(),
     priority: z.nativeEnum(TaskPriority).optional(),
-    assignee: z.string().optional(),
+    assignee: z.string().nullable().optional(),
     dueDate: z.string().datetime().optional(),
   }),
 });

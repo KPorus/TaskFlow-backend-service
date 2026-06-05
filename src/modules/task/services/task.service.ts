@@ -9,10 +9,15 @@ import {
   validateTaskUpdate,
   validateCompletedReassignment,
 } from "@/helpers/task-validation.helper";
-import { canDeleteTask, canUpdateTask } from "@/helpers/permission.helper";
+import {
+  canDeleteTask,
+  canUpdateTask,
+  checkProjectAccess,
+} from "@/helpers/permission.helper";
 import { ActivityType } from "@/modules/activity/types/activity.types";
 import { canAccessProject } from "@/helpers/project-access.helper";
 import { Project } from "@/modules/project/models/project.model";
+import { Comment } from "@/modules/comment/models/comment.model";
 import { HTTP_STATUS_CODES } from "@/utils/http-status-codes";
 import { AuthUser } from "@/modules/auth/types/auth.types";
 import { ITask, TaskListQuery } from "../types/task.types";
@@ -21,6 +26,7 @@ import { logActivity } from "@/helpers/activity.helper";
 import { Task, TaskStatus } from "../models/task.model";
 import { AppError } from "@/types/error.type";
 import { Types } from "mongoose";
+import mongoose from "mongoose";
 import { io } from "@/server";
 
 const createTask = async (data: Partial<ITask>, actor?: AuthUser) => {
@@ -33,6 +39,17 @@ const createTask = async (data: Partial<ITask>, actor?: AuthUser) => {
   const project = await Project.findById(data.project);
   if (!project) {
     throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
+  }
+
+  if (actor) {
+    const allowed = await checkProjectAccess(
+      actor,
+      data.project!,
+      "create_task",
+    );
+    if (!allowed) {
+      throw new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden");
+    }
   }
 
   await validateTaskCreate(data.project!, {
@@ -185,21 +202,40 @@ const deleteTask = async (
   if (!task) {
     throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Task not found");
   }
+  if (!task.project.equals(projectId)) {
+    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Task not found");
+  }
   const allowed = await canDeleteTask(user, task);
   if (!allowed) {
     throw new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden");
   }
 
-  const deleted_task = await Task.deleteTask(
-    new Types.ObjectId(id),
-    new Types.ObjectId(projectId),
-  );
-  if (deleted_task?.project) {
-    io.to(String(deleted_task.project)).emit("taskDelete", deleted_task);
+  const session = await mongoose.startSession();
+  let deletedCommentsCount = 0;
+
+  try {
+    await session.withTransaction(async () => {
+      const commentResult = await Comment.deleteManyById(id, { session });
+      deletedCommentsCount = commentResult.deletedCount ?? 0;
+
+      const taskResult = await Task.deleteOne(
+        { _id: id, project: projectId },
+        { session },
+      );
+      if (taskResult.deletedCount === 0) {
+        throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Task not found");
+      }
+    });
+  } finally {
+    await session.endSession();
   }
+
+  io.to(String(task.project)).emit("taskDelete", task);
+
   return {
     message: "Task Deleted Successfully",
-    task: deleted_task,
+    task,
+    deletedCommentsCount,
   };
 };
 
@@ -220,10 +256,20 @@ const updateTask = async (
 
   await validateTaskUpdate(existing, updateData);
 
-  const updated_task = await Task.updateTask(
-    new Types.ObjectId(taskId),
-    updateData,
-  );
+  let updated_task;
+  if ("assignee" in updateData && updateData.assignee == null) {
+    const { assignee: _assignee, ...rest } = updateData;
+    updated_task = await Task.findByIdAndUpdate(
+      taskId,
+      { $unset: { assignee: 1 }, ...rest },
+      { new: true },
+    );
+  } else {
+    updated_task = await Task.updateTask(
+      new Types.ObjectId(taskId),
+      updateData,
+    );
+  }
   if (updated_task?.project) {
     io.to(String(updated_task.project)).emit("taskUpdate", updated_task);
   }

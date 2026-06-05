@@ -119,7 +119,14 @@ const deleteComment = async (
     throw new AppError(HTTP_STATUS_CODES.FORBIDDEN, "Forbidden");
   }
 
+  const commentTaskId = comment.task;
   await Comment.deleteComment(commentId);
+
+  io.to(String(task.project)).emit("commentDeleted", {
+    commentId: String(commentId),
+    taskId: String(commentTaskId),
+  });
+
   return { message: "Comment deleted" };
 };
 

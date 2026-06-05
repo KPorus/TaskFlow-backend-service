@@ -14,7 +14,7 @@ const create = async (req: AuthRequest, res: Response) => {
     text,
     req.user,
   );
-  sendResponse(
+  return sendResponse(
     res,
     result,
     HTTP_STATUS_CODES.CREATED,

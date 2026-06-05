@@ -1,4 +1,11 @@
-import { Model, Schema, Types, model } from "mongoose";
+import {
+  ClientSession,
+  DeleteResult,
+  Model,
+  Schema,
+  Types,
+  model,
+} from "mongoose";
 
 export interface CommentDocument {
   _id: Types.ObjectId;
@@ -13,6 +20,10 @@ export interface CommentModelType extends Model<CommentDocument> {
   createComment(data: Partial<CommentDocument>): Promise<CommentDocument>;
   findByTask(taskId: Types.ObjectId | string): Promise<CommentDocument[]>;
   deleteComment(id: Types.ObjectId | string): Promise<CommentDocument | null>;
+  deleteManyById(
+    taskId: Types.ObjectId | string,
+    options?: { session?: ClientSession },
+  ): Promise<DeleteResult>;
 }
 
 const CommentSchema = new Schema<CommentDocument, CommentModelType>(
@@ -42,6 +53,13 @@ CommentSchema.statics.deleteComment = async function (
   id: Types.ObjectId | string,
 ) {
   return await this.findByIdAndDelete(id);
+};
+
+CommentSchema.statics.deleteManyById = async function (
+  taskId: Types.ObjectId | string,
+  options?: { session?: ClientSession },
+) {
+  return this.deleteMany({ task: taskId }, { session: options?.session });
 };
 
 export const Comment = model<CommentDocument, CommentModelType>(
