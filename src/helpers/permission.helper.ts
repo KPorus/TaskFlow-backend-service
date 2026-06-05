@@ -1,0 +1,89 @@
+import { Project } from "@/modules/project/models/project.model";
+import { UserRole } from "@/modules/auth/types/auth.types";
+import { AuthUser } from "@/modules/auth/types/auth.types";
+import { Types } from "mongoose";
+
+export type ProjectAction =
+  | "manage"
+  | "create_task"
+  | "delete_task"
+  | "assign_task"
+  | "update_task"
+  | "view";
+
+export const isAdmin = (user?: AuthUser): boolean =>
+  user?.role === UserRole.ADMIN;
+
+export const isProjectOwner = (
+  project: { owner: Types.ObjectId | string | { toString(): string } },
+  userId: Types.ObjectId | string,
+): boolean => {
+  const ownerId =
+    project.owner instanceof Types.ObjectId
+      ? project.owner.toString()
+      : String(project.owner);
+  return ownerId === String(userId);
+};
+
+export const isProjectMember = (
+  project: { members: { user: Types.ObjectId | string }[] },
+  userId: Types.ObjectId | string,
+): boolean => project.members.some((m) => String(m.user) === String(userId));
+
+export async function checkProjectAccess(
+  user: AuthUser,
+  projectId: Types.ObjectId | string,
+  action: ProjectAction,
+): Promise<boolean> {
+  if (isAdmin(user)) return true;
+
+  const project = await Project.findByProjectId(projectId);
+  if (!project) return false;
+
+  const userId = user.id;
+  const member = isProjectMember(project, userId);
+  const owner = isProjectOwner(project, userId);
+
+  if (!member && !owner) return false;
+
+  switch (action) {
+    case "manage":
+    case "delete_task":
+      return owner;
+    case "create_task":
+    case "assign_task":
+    case "view":
+    case "update_task":
+      return owner || member;
+    default:
+      return false;
+  }
+}
+
+export async function canUpdateTask(
+  user: AuthUser,
+  task: {
+    assignee?: Types.ObjectId | string;
+    project: Types.ObjectId | string;
+    creator: Types.ObjectId | string;
+  },
+): Promise<boolean> {
+  if (isAdmin(user)) return true;
+
+  const project = await Project.findByProjectId(task.project);
+  if (!project) return false;
+
+  return isProjectOwner(project, user.id) || isProjectMember(project, user.id);
+}
+
+export async function canDeleteTask(
+  user: AuthUser,
+  task: { project: Types.ObjectId | string },
+): Promise<boolean> {
+  if (isAdmin(user)) return true;
+
+  const project = await Project.findByProjectId(task.project);
+  if (!project) return false;
+
+  return isProjectOwner(project, user.id);
+}

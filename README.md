@@ -1,164 +1,419 @@
 # TaskFlow Backend Service
 
-## Project description
+REST API for **TaskFlow** — Smart Project & Task Collaboration System.
 
-The Task Monitor Backend Service is a **RESTful** API for creating, updating, and monitoring tasks, designed to power a task or productivity application backend, such as Jira. It is built with TypeScript and Node.js and is designed to be easily deployable ( Render) and simple to extend with new features. It is structured as a modern TypeScript/Node.js service with environment-based configuration, linting, and deployment support already wired in.
+Companion frontend: [`../TaskFlow-frontend-service/README.md`](../TaskFlow-frontend-service/README.md)
 
-This project follows a **team-scoped role** model for authorization, rather than defining different global user types.
+---
 
-- A single type of user account exists for everyone in the system (no separate “global admin” or “org user” types).
-- Any authenticated user can create a team and automatically becomes the **owner** of that team.
-- The same user can belong to multiple teams simultaneously, with a different role in each team (owner in Team A, admin in Team B, member in Team C).
-- Roles such as **owner**, **admin**, and **member** are always defined **per team**, not globally.
+## Purpose & Description
 
-This approach is flexible and scalable and matches how most modern collaboration tools and Jira‑style project management systems structure permissions.
+TaskFlow is a real-time Kanban project management platform for teams. The backend provides:
 
-### Team‑scoped permissions
+- JWT authentication with refresh-token cookies
+- Project and membership management
+- Kanban tasks with priorities, assignees, due dates, and validation rules
+- Dashboard analytics scoped by project visibility
+- Activity audit log, flat task comments, and persisted notifications
+- Real-time updates via Socket.IO
 
-All key operations are authorized by checking the user’s role **within the specific team**:
+### Tech Stack
 
-- **Team management**
+| Layer      | Technology                                 |
+| ---------- | ------------------------------------------ |
+| Runtime    | Node.js >= 20                              |
+| Language   | TypeScript                                 |
+| Framework  | Express 4                                  |
+| Database   | MongoDB (Mongoose 8)                       |
+| Auth       | JWT + bcrypt + HTTP-only refresh cookies   |
+| Validation | Zod                                        |
+| Real-time  | Socket.IO 4                                |
+| Testing    | Jest (scaffold present; no test files yet) |
 
-  - Create team: Any authenticated user can create a team and becomes its owner.
-  - Add/remove team member: Allowed for team owners/admins.
-  - Delete team: Restricted to team owners (and optionally admins), with safeguards if active tasks exist.
+---
 
-- **Task management**
+## Role Model
 
-  - Create task: Team members can create tasks within teams they belong to.
-  - Update/delete task: Restricted to the task’s assignee or users with sufficient role in that team (e.g. owner/admin).
-  - Assign task: Owners/admins can assign tasks to any team member; optional rules can allow self-assignment for members.
+TaskFlow uses **two layers** of roles. They are not interchangeable.
 
-- **Listing and querying**
-  - List teams: Returns teams where the user has any role (owner/admin/member).
-  - List users: Returns users within a specific team for assignment and collaboration.
-  - List tasks: Returns tasks scoped to teams the user belongs to, with filters by status, assignee, and other fields.
+### Global roles (stored on User / JWT)
 
-This model keeps the global user concept simple and concentrates authorization logic at the team level, which is easier to reason about and extend over time.
+| Role    | Description                                                                  |
+| ------- | ---------------------------------------------------------------------------- |
+| `ADMIN` | System administrator. Bypasses all project-level permission checks.          |
+| `USER`  | Default role for registered users. Permissions depend on project membership. |
 
-## Objectives
+Defined in `src/modules/auth/types/auth.types.ts`.
 
-- Provide a clean, typed backend API for managing and monitoring tasks
-- Offer a structure that is easy to extend with new modules (auth, task, teams)
-- Support reliable local development with environment-based configuration and automated testing
+### Project roles (computed at runtime)
 
-## Features
+| Role     | How it is determined                |
+| -------- | ----------------------------------- |
+| `OWNER`  | User matches `project.owner`        |
+| `MEMBER` | User appears in `project.members[]` |
 
-These requirements describe a Jira‑style team and task management backend with authentication and token refresh, centered around teams, users, and tasks.
+There is **no per-member role field** in the database (no viewer/editor enum). Owners are automatically added to `members` on project creation.
 
-### Domain entities
+### Demo accounts
 
-- **User**: Represents an authenticated account that can belong to teams, create tasks, and be assigned work.
-- **Team**: A named group of users for organizing work (squads, projects, departments) similar to Jira projects/boards.
-- **Task/Issue**: A unit of work (ticket) that can be created, assigned to users/teams, tracked through statuses, and updated over time.
+Demo users are seeded for testing. They map to **behavior**, not separate code roles:
 
-### User and team features
+| Account              | Global role | Typical project role |
+| -------------------- | ----------- | -------------------- |
+| `admin@taskflow.com` | `ADMIN`     | Bypasses all checks  |
 
-- **Create team**: Create a new team with a name, optional description, and initial owner/maintainer.
-- **Add team member**: Add existing users to a team with roles (member, admin) to control permissions.
-- **Remove team member**: Detach a user from a team while preserving their historical task activity.
-- **Delete team**: Soft or hard delete a team; optionally restrict deletion if it still has active tasks.
+---
 
-### Task management features
+## Permissions (API Enforcement)
 
-- **Create task**: Create tasks within a team (or globally), including fields like title, description, status, priority, and due date.
-- **Update task**: Edit task content, status, assignee, and other fields, respecting permissions and workflow rules.
-- **Delete task**: Remove or archive tasks; optionally enforce constraints (only admins can permanently delete).
-- **Assign task**: Assign tasks to specific users (and optionally to a team) to mirror Jira’s assignee behavior.
-- **List task**: List tasks with filters by team, assignee, status, priority, and search text, plus pagination.
+Source of truth: `src/helpers/permission.helper.ts`, `src/helpers/project-access.helper.ts`, and service-layer checks.
 
-### Listing and querying
+| Feature / Action                           |    ADMIN    |         OWNER         |     MEMBER      | Non-member |
+| ------------------------------------------ | :---------: | :-------------------: | :-------------: | :--------: |
+| View visible projects                      |     All     | Own + member projects | Member projects |     No     |
+| Create project                             |     Yes     |          Yes          |       Yes       |     No     |
+| Update / delete project                    |     Yes     |          Yes          |       No        |     No     |
+| Add / remove members                       |     Yes     |          Yes          |       No        |     No     |
+| View tasks (`POST /task/task-list`)        |     Yes     |          Yes          |       Yes       |     No     |
+| Create task                                |     Yes     |          Yes          |       Yes       |     No     |
+| Update task (all fields, assign/unassign)  |     Yes     |          Yes          |       Yes       |     No     |
+| Delete task                                |     Yes     |          Yes          |       No        |     No     |
+| Assign via `PUT /task/assign-task`         |     Yes     |          Yes          |       Yes       |     No     |
+| View dashboard / activity                  | System-wide |    Project-scoped     | Project-scoped  |     No     |
+| Create / list comments                     |     Yes     |          Yes          |       Yes       |     No     |
+| Delete comment                             |     Yes     |    Author or owner    |   Author only   |     No     |
+| List / mark own notifications              |     Yes     |          Yes          |       Yes       |     No     |
+| List all users (`GET /auth/get-all-users`) |     Yes     |          No           |       No        |     No     |
+| Socket.IO `joinProject`                    |     Yes     |          Yes          |       Yes       |     No     |
 
-- **List team**: Return all teams visible to the current user, with optional filters (by role, ownership).
-- **List user**: List users in a team or the entire system, possibly with search and pagination to support assignment dialogs.
-- **Jira‑like workflows**: Support To Do/In Progress/Done‑style statuses and future extension to more complex workflows.
+### `checkProjectAccess` action matrix
 
-### Auth and tokens
+| Action                                              | Owner | Member |
+| --------------------------------------------------- | :---: | :----: |
+| `manage`, `delete_task`                             |  Yes  |   No   |
+| `create_task`, `assign_task`, `view`, `update_task` |  Yes  |  Yes   |
 
-- **Authentication**: Login and registration endpoints that issue short‑lived access tokens (JWT) after verifying credentials.
-- **Refresh token**: A secure, long‑lived refresh token flow to obtain new access tokens without forcing frequent logins, ideally with rotation and revocation support.
-- **Protected routes**: All team and task routes require a valid access token, with role checks ( only team admins can remove members).
+### Business rules
 
-## Project structure
+- **Assignee validation:** On create/update, assignee must be the project owner or in `project.members` (`task.service.ts`).
+- **Completed tasks:** Cannot be reassigned to a different user (`task-validation.helper.ts`). Unassigning is allowed.
+- **Duplicate titles:** Task titles must be unique within a project.
+- **Due dates:** Cannot be set in the past.
+- **Member removal:** Clears that member as assignee on all tasks in the project.
+- **Notifications:** Users can only mark their own notifications as read.
 
-Key files and directories in the repository
+### Permission helpers
 
-- `.github/workflows/` – CI/CD workflows for automated checks (tests, lint).
-- `.husky/` – Git hooks (pre-commit, pre-push) to enforce code quality
-- `src/` – Main application source code (routes, controllers, services, models)
-- `.env.example` – Example environment variables for local development
-- `.env.test.example` – Example environment variables for running tests
-- `.gitignore` – Git ignore rules for node modules, build outputs, and secrets
-- `.prettierrc` – Prettier configuration for consistent code formatting
-- `Task_monitor.excalidraw` – Architecture/flow diagram of the backend service
-- `eslint.config.mjs` – ESLint configuration for linting TypeScript/JavaScript
-- `jest.config.json` – Jest test runner configuration
-- `package.json` – Project metadata, scripts, and dependencies
-- `package-lock.json` / `pnpm-lock.yaml` – Lockfiles for reproducible installs
-- `tsconfig.json` – TypeScript compiler options
-- `vercel.json` – Configuration for deployment to Vercel
+| Helper               | Location                   | Purpose                           |
+| -------------------- | -------------------------- | --------------------------------- |
+| `isAdmin`            | `permission.helper.ts`     | Global admin check                |
+| `isProjectOwner`     | `permission.helper.ts`     | Owner check                       |
+| `isProjectMember`    | `permission.helper.ts`     | Member list check                 |
+| `checkProjectAccess` | `permission.helper.ts`     | Route middleware action checks    |
+| `canUpdateTask`      | `permission.helper.ts`     | Owner or member of task's project |
+| `canDeleteTask`      | `permission.helper.ts`     | Admin or project owner only       |
+| `canAccessProject`   | `project-access.helper.ts` | View/join project                 |
+| `getVisibleProjects` | `project-access.helper.ts` | Scope queries for non-admins      |
 
-## Getting started
+---
 
-1. Clone the repository and install dependencies:
-   ```bash
-   git clone https://github.com/KPorus/task-monitor-backend-service.git
-   cd task-monitor-backend-service
-   pnpm install
-   ```
-2. Create a `.env` file from `.env.example` and fill in the required values (database URL, ports, etc.)
-3. Run the development server:
-   ```bash
-   pnpm start:dev
-   ```
-
-Architecture Diagram of Backend Service
+## System Architecture
 
 ```mermaid
-erDiagram
-    USER {
-        string _id
-        string name
-        string email
-        string password
-        datetime createdAt
-        datetime updatedAt
-    }
+flowchart TB
+  subgraph client [Frontend - React + Vite]
+    UI[Pages and Components]
+    Redux[Redux Store]
+    API[apiService + request.ts]
+    SockClient[Socket.IO Client]
+    UI --> Redux
+    UI --> API
+    UI --> SockClient
+  end
 
-    TEAM {
-        string _id
-        string name
-        string ownerId
-        datetime createdAt
-        datetime updatedAt
-    }
+  subgraph server [Backend - Express + Socket.IO]
+    Routes[root.route /api/v1]
+    AuthMW[auth.middleware]
+    Modules[Modules: auth project task dashboard activity comment notification]
+    Helpers[permission.helper project-access.helper]
+    SockServer[Socket.IO Server]
+    Routes --> AuthMW --> Modules
+    Modules --> Helpers
+    Modules --> SockServer
+  end
 
-    TEAM_MEMBER {
-        string _id
-        string teamId
-        string userId
-    }
+  DB[(MongoDB)]
 
-    TASK {
-        string _id
-        string title
-        string description
-        string status "TODO | IN_PROGRESS | DONE"
-        string priority "LOW | MEDIUM | HIGH"
-        string assigneeId
-        string creatorId
-        string teamId
-        datetime dueDate
-        datetime createdAt
-        datetime updatedAt
-    }
+  API -->|REST JWT| Routes
+  SockClient -->|JWT handshake| SockServer
+  Modules --> DB
+```
 
-    %% Relationships
-    USER ||--o{ TEAM : "owns"
-    USER ||--o{ TEAM_MEMBER : "is"
-    TEAM ||--o{ TEAM_MEMBER : "has"
-    TEAM ||--o{ TASK : "contains"
-    USER ||--o{ TASK : "creates"
-    USER ||--o{ TASK : "assigned_to"
+### Request flow
+
+1. Client sends `Authorization: Bearer <token>` on REST calls.
+2. `authenticateJWT` middleware validates the token and sets `req.user`.
+3. Route-level middleware (`requireProjectAccess`, `requireGlobalRole`) or service-layer checks enforce permissions.
+4. Socket.IO connections authenticate via `socket.handshake.auth.token`; `joinProject` and `joinUser` are permission-checked.
+
+---
+
+## Activity Diagrams (Core Features)
+
+### Authentication and session
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Frontend
+  participant API as Backend_API
+  participant DB as MongoDB
+
+  User->>Frontend: Login or Register
+  Frontend->>API: POST /auth/login or /register
+  API->>DB: Verify or create user
+  API-->>Frontend: JWT + refresh cookie
+  Frontend->>Frontend: Store token loadUser
+  Frontend->>API: GET /project/list
+  API-->>Frontend: Visible projects
+```
+
+### Task lifecycle (create, assign, update status)
+
+```mermaid
+flowchart TD
+  start[Member opens board] --> checkCreate{canCreateTask?}
+  checkCreate -->|No| denied[403 Forbidden]
+  checkCreate -->|Yes| apiCreate["POST /task/create-task/:projectId"]
+  apiCreate --> permCheck["checkProjectAccess(create_task)"]
+  permCheck --> assigneeCheck[Assignee in project members?]
+  assigneeCheck --> saveTask[Save task + emit taskCreated]
+  saveTask --> edit[Member edits or updates status]
+  edit --> apiUpdate["PUT /task/update-task/:taskId"]
+  apiUpdate --> canUpdate["canUpdateTask — owner or member"]
+  canUpdate --> emitUpdate[emit taskUpdate + notifications]
+```
+
+### Project membership and real-time sync
+
+```mermaid
+flowchart TD
+  owner[Owner opens Project Settings] --> addMember["PUT /project/:id/add-member"]
+  addMember --> manageCheck["requireProjectAccess(manage)"]
+  manageCheck --> updateDB[Add to project.members]
+  updateDB --> socketEmit[emit projectMemberAdd]
+  socketEmit --> memberClient[Member client receives event]
+  memberClient --> joinRoom[joinProject socket room]
+  removeMember[Owner removes member] --> clearAssignees[Clear assignee on member tasks]
+  clearAssignees --> redirect[Removed member loses board access]
+```
+
+---
+
+## File Structure
 
 ```
+TaskFlow-backend-service/
+├── src/
+│   ├── server.ts              # Express + Socket.IO entry
+│   ├── root.route.ts          # Mounts all module routers under /api/v1
+│   ├── config/
+│   │   └── db.config.ts
+│   ├── handlers/
+│   │   ├── async.handler.ts
+│   │   ├── error.handler.ts
+│   │   └── response.handler.ts
+│   ├── helpers/
+│   │   ├── permission.helper.ts       # RBAC core
+│   │   ├── project-access.helper.ts   # Visibility scoping
+│   │   ├── task-validation.helper.ts
+│   │   ├── activity.helper.ts
+│   │   ├── notification-recipients.helper.ts
+│   │   ├── membership-events.helper.ts
+│   │   ├── socket-auth.helper.ts
+│   │   └── auth.helper.ts
+│   ├── middlewares/
+│   │   ├── auth.middleware.ts         # JWT + project access guards
+│   │   ├── validate.middleware.ts
+│   │   └── error.middleware.ts
+│   ├── types/
+│   ├── utils/
+│   ├── tests/
+│   │   ├── setup/
+│   │   └── utils/
+│   └── modules/
+│       ├── auth/          # Login, register, JWT, user listing
+│       │   ├── controllers/
+│       │   ├── services/
+│       │   ├── routes/
+│       │   ├── models/
+│       │   ├── validators/
+│       │   └── types/
+│       ├── project/       # CRUD, membership
+│       ├── task/          # Kanban tasks
+│       ├── dashboard/     # Analytics
+│       ├── activity/      # Audit feed
+│       ├── comment/       # Task comments
+│       └── notification/  # User notifications
+├── scripts/
+│   └── seed.ts            # Promote admin + seed demo users
+├── package.json
+├── tsconfig.json
+├── jest.config.json
+├── vercel.json
+└── .env.example
+```
+
+Each module follows: `controllers/`, `services/`, `routes/`, `models/`, `validators/`, `types/`.
+
+---
+
+## API Routes
+
+Base URL: `http://localhost:5000/api/v1`
+
+### Auth — `/auth`
+
+| Method | Path                | Auth        | Description                |
+| ------ | ------------------- | ----------- | -------------------------- |
+| POST   | `/login`            | Public      | Login; sets refresh cookie |
+| POST   | `/register`         | Public      | Sign up                    |
+| POST   | `/refreshToken`     | Cookie      | Refresh access token       |
+| GET    | `/get-all-users`    | JWT + ADMIN | List all users             |
+| GET    | `/users-for-invite` | JWT         | Users for project invites  |
+
+### Project — `/project`
+
+| Method | Path                     | Auth         | Description                           |
+| ------ | ------------------------ | ------------ | ------------------------------------- |
+| POST   | `/create`                | JWT          | Create project (caller becomes owner) |
+| GET    | `/list`                  | JWT          | List visible projects                 |
+| PUT    | `/update/:projectId`     | JWT + manage | Update project                        |
+| PUT    | `/:projectId/add-member` | JWT + manage | Add member                            |
+| PUT    | `/remove-member`         | JWT + manage | Remove member                         |
+| DELETE | `/delete-project`        | JWT + manage | Delete project                        |
+
+### Task — `/task`
+
+| Method | Path                      | Auth                | Description                  |
+| ------ | ------------------------- | ------------------- | ---------------------------- |
+| POST   | `/task-list`              | JWT + view          | Filtered/paginated task list |
+| POST   | `/create-task/:projectId` | JWT + create_task   | Create task                  |
+| PUT    | `/assign-task`            | JWT + assign_task   | Assign task                  |
+| PUT    | `/update-task/:taskId`    | JWT + canUpdateTask | Update task                  |
+| DELETE | `/delete-task`            | JWT + canDeleteTask | Delete task                  |
+
+### Dashboard — `/dashboard`
+
+| Method | Path                  | Description            |
+| ------ | --------------------- | ---------------------- |
+| GET    | `/stats`              | KPI counts             |
+| GET    | `/project-summaries`  | Per-project summaries  |
+| GET    | `/workload`           | Assignee workload      |
+| GET    | `/upcoming-deadlines` | Tasks due soon         |
+| GET    | `/high-priority`      | High-priority tasks    |
+| GET    | `/charts`             | Chart aggregation data |
+
+### Activity — `/activity`
+
+| Method | Path      | Description          |
+| ------ | --------- | -------------------- |
+| GET    | `/recent` | Recent activity feed |
+
+### Comment — `/comment`
+
+| Method | Path          | Description    |
+| ------ | ------------- | -------------- |
+| POST   | `/:taskId`    | Add comment    |
+| GET    | `/:taskId`    | List comments  |
+| DELETE | `/:commentId` | Delete comment |
+
+### Notification — `/notification`
+
+| Method | Path        | Description                       |
+| ------ | ----------- | --------------------------------- |
+| GET    | `/`         | List current user's notifications |
+| PUT    | `/:id/read` | Mark notification read            |
+
+### Socket.IO events
+
+**Server → client:** `taskCreated`, `taskUpdate`, `taskDelete`, `taskAssign`, `commentAdded`, `commentDeleted`, `projectUpdated`, `projectDeleted`, `projectMemberAdd`, `projectMemberRemove`, `memberAssigneesCleared`, `notification`
+
+**Client → server:** `joinProject(projectId)`, `joinUser(userId)` (both permission-checked)
+
+---
+
+## Setup
+
+```bash
+cd TaskFlow-backend-service
+pnpm install
+cp .env.example .env
+# Set MONGODB_URI and JWT_SECRET
+pnpm run seed      # Promotes admin@taskflow.com to ADMIN
+pnpm run start:dev
+```
+
+Server runs at `http://localhost:5000/api/v1`.
+
+### Environment variables
+
+| Variable          | Required            | Description                                              |
+| ----------------- | ------------------- | -------------------------------------------------------- |
+| `PORT`            | No (default `5000`) | HTTP port                                                |
+| `MONGODB_URI`     | Yes                 | MongoDB connection string                                |
+| `JWT_SECRET`      | Yes                 | JWT signing secret                                       |
+| `CLIENT_ECOM_URL` | Prod                | Frontend origin for CORS (e.g. `http://localhost:3000`)  |
+| `NODE_ENV`        | No                  | `development` or `production`                            |
+| `ADMIN_EMAIL`     | Seed                | Email to promote to ADMIN (default `admin@taskflow.com`) |
+
+### Demo credentials
+
+| Account              | Email               | Password   |
+| -------------------- | ------------------- | ---------- |
+| Admin                | admin@taskflow.com  | Admin@123  |
+| Project owner (demo) | pm@taskflow.com     | Pm@123     |
+| Team member (demo)   | member@taskflow.com | Member@123 |
+
+### Scripts
+
+| Command              | Description                        |
+| -------------------- | ---------------------------------- |
+| `pnpm run start:dev` | Dev server with nodemon            |
+| `pnpm run build`     | Compile TypeScript                 |
+| `pnpm start`         | Production (`node dist/server.js`) |
+| `pnpm test`          | Run Jest                           |
+| `pnpm run seed`      | Seed admin user                    |
+
+---
+
+## Deployment
+
+```bash
+pnpm run build
+pnpm start
+```
+
+Vercel deployment is configured via `vercel.json` (entry: `dist/server.js`).
+
+---
+
+## Future Features (Roadmap)
+
+Planned improvements not yet implemented:
+
+- Granular project roles (viewer / editor) stored in schema
+- Email and push notifications beyond in-app Socket.IO
+- Task attachments and rich-text descriptions
+- Subtasks, labels, and task dependencies
+- OAuth / SSO login
+- Full automated test coverage
+- `@mentions` in comments
+- Project templates and recurring tasks
+- Audit log export and advanced reporting
+
+---
+
+## Related
+
+- Frontend client: [`../TaskFlow-frontend-service`](../TaskFlow-frontend-service)

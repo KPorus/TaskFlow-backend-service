@@ -1,0 +1,255 @@
+import {
+  notifyMany,
+  notifyProjectOwner,
+  projectLink,
+} from "@/helpers/notification-recipients.helper";
+import {
+  emitMembershipChanged,
+  emitProjectRoomMembership,
+} from "@/helpers/membership-events.helper";
+import {
+  getRoleOnProject,
+  getVisibleProjects,
+} from "@/helpers/project-access.helper";
+import { ActivityType } from "@/modules/activity/types/activity.types";
+import { HTTP_STATUS_CODES } from "@/utils/http-status-codes";
+import { AuthUser } from "@/modules/auth/types/auth.types";
+import { Task } from "@/modules/task/models/task.model";
+import { User } from "@/modules/auth/models/auth.model";
+import { logActivity } from "@/helpers/activity.helper";
+import { ProjectStatus } from "../types/project.types";
+import { isAdmin } from "@/helpers/permission.helper";
+import { Project } from "../models/project.model";
+import { AppError } from "@/types/error.type";
+import { Types } from "mongoose";
+import { io } from "@/server";
+
+const createProject = async (
+  data: {
+    name: string;
+    description?: string;
+    deadline?: Date;
+    status?: ProjectStatus;
+    owner: Types.ObjectId | string;
+  },
+  actor?: AuthUser,
+) => {
+  const project = await Project.createProject({
+    name: data.name,
+    description: data.description,
+    deadline: data.deadline,
+    status: data.status,
+    owner:
+      typeof data.owner === "string"
+        ? new Types.ObjectId(data.owner)
+        : data.owner,
+  });
+  if (actor) {
+    await logActivity({
+      type: ActivityType.PROJECT_CREATED,
+      message: `Project "${project.name}" created`,
+      actor: actor.id,
+      project: project._id,
+    });
+  }
+
+  return {
+    message: "Project created successfully",
+    project: {
+      ...project.toObject(),
+      roleOnProject: "OWNER" as const,
+    },
+  };
+};
+
+const getUserProjects = async (
+  user: AuthUser,
+  filters?: { status?: ProjectStatus; search?: string },
+) => {
+  let projects = await getVisibleProjects(user);
+  if (!projects || projects.length === 0) {
+    return { message: "User projects fetched successfully", projects: [] };
+  }
+  if (filters?.status) {
+    projects = projects.filter((p) => p.status === filters.status);
+  }
+  if (filters?.search) {
+    const q = filters.search.toLowerCase();
+    projects = projects.filter((p) => p.name.toLowerCase().includes(q));
+  }
+
+  const projectsWithRole = projects.map((p) => ({
+    ...p.toObject(),
+    roleOnProject: isAdmin(user)
+      ? ("ADMIN" as const)
+      : getRoleOnProject(p, user.id),
+  }));
+
+  return {
+    message: "User projects fetched successfully",
+    projects: projectsWithRole,
+  };
+};
+
+const updateProject = async (
+  projectId: Types.ObjectId | string,
+  data: {
+    name?: string;
+    description?: string;
+    deadline?: Date;
+    status?: ProjectStatus;
+  },
+) => {
+  const project = await Project.updateProject(projectId, data);
+  if (!project) {
+    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
+  }
+  io.to(String(project._id)).emit("projectUpdated", project);
+  return {
+    message: "Project updated successfully",
+    project,
+  };
+};
+
+const addMember = async (
+  projectId: Types.ObjectId | string,
+  member: { user: Types.ObjectId | string },
+  actor?: AuthUser,
+) => {
+  const project = await Project.addMember(projectId, member);
+  if (!project) {
+    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
+  }
+
+  const memberId = String(member.user);
+  const projectIdStr = String(projectId);
+
+  emitProjectRoomMembership(projectId, "projectMemberAdd", project);
+  emitMembershipChanged(memberId, {
+    action: "ADDED",
+    projectId: projectIdStr,
+    project,
+  });
+  const addedUser = await User.findById(memberId);
+  const link = projectLink(projectId);
+
+  await notifyMany(
+    [memberId],
+    {
+      type: "MEMBER_ADDED",
+      message: `You were added to project "${project.name}"`,
+      link,
+    },
+    { excludeUserId: actor?.id },
+  );
+
+  await notifyProjectOwner(
+    projectId,
+    {
+      type: "MEMBER_ADDED",
+      message: `${addedUser?.name ?? "A user"} was added to "${project.name}"`,
+      link,
+    },
+    actor?.id,
+  );
+
+  if (actor) {
+    await logActivity({
+      type: ActivityType.MEMBER_ADDED,
+      message: `Member added to "${project.name}"`,
+      actor: actor.id,
+      project: projectId,
+    });
+  }
+
+  return {
+    message: "Member added successfully",
+    project,
+  };
+};
+
+const removeMember = async (
+  projectId: Types.ObjectId | string,
+  memberId: Types.ObjectId | string,
+  actor?: AuthUser,
+) => {
+  const removedUser = await User.findById(memberId);
+  const projectBefore = await Project.findByProjectId(projectId);
+  const memberObjectId =
+    typeof memberId === "string" ? new Types.ObjectId(memberId) : memberId;
+
+  await Task.clearAssigneeForMemberInProject(projectId, memberObjectId);
+
+  const project = await Project.removeMember(projectId, memberId);
+  if (!project) {
+    throw new AppError(HTTP_STATUS_CODES.NOT_FOUND, "Project not found");
+  }
+
+  const projectIdStr = String(projectId);
+  io.to(projectIdStr).emit("memberAssigneesCleared", {
+    projectId: projectIdStr,
+    memberId: String(memberId),
+  });
+  emitProjectRoomMembership(projectId, "projectMemberRemove", project);
+  emitMembershipChanged(memberId, {
+    action: "REMOVED",
+    projectId: projectIdStr,
+  });
+
+  const link = projectLink(projectId);
+  const projectName = project.name ?? projectBefore?.name ?? "project";
+
+  await notifyMany(
+    [memberId],
+    {
+      type: "MEMBER_REMOVED",
+      message: `You were removed from project "${projectName}"`,
+      link,
+    },
+    { excludeUserId: actor?.id },
+  );
+
+  await notifyProjectOwner(
+    projectId,
+    {
+      type: "MEMBER_REMOVED",
+      message: `${removedUser?.name ?? "A member"} was removed from "${projectName}"`,
+      link,
+    },
+    actor?.id,
+  );
+
+  if (actor) {
+    await logActivity({
+      type: ActivityType.MEMBER_REMOVED,
+      message: `Member removed from "${projectName}"`,
+      actor: actor.id,
+      project: projectId,
+    });
+  }
+
+  return {
+    message: "Member removed successfully",
+    project,
+  };
+};
+
+const deleteProject = async (id: string) => {
+  const result = await Project.deleteProject(new Types.ObjectId(id));
+  if (result.deletedCount && result.deletedCount > 0) {
+    io.to(id).emit("projectDeleted", { projectId: id });
+  }
+  return {
+    message: "Project deleted successfully",
+    result,
+  };
+};
+
+export const projectService = {
+  createProject,
+  getUserProjects,
+  updateProject,
+  addMember,
+  removeMember,
+  deleteProject,
+};
