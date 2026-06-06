@@ -6,16 +6,127 @@ Companion frontend: [`../TaskFlow-frontend-service/README.md`](../TaskFlow-front
 
 ---
 
+## Features Overview
+
+| Area               | Capabilities                                                                     |
+| ------------------ | -------------------------------------------------------------------------------- |
+| **Authentication** | JWT access tokens, HTTP-only refresh cookies, register/login                     |
+| **Projects**       | CRUD, owner/member roles, invite and remove members                              |
+| **Tasks (Kanban)** | Create, assign, update status, priorities, due dates, validation rules           |
+| **Dashboard**      | KPI stats, project summaries, workload, deadlines, charts (scoped by visibility) |
+| **Comments**       | Flat comments on tasks with author permissions                                   |
+| **Notifications**  | Persisted in-app notifications with read state                                   |
+| **Activity log**   | Audit feed for project and task events                                           |
+| **Real-time**      | Socket.IO for tasks, projects, comments, membership, and notifications           |
+
+**Stack:** Node.js 20+, TypeScript, Express 4, MongoDB (Mongoose 8), Zod, Socket.IO 4.
+
+---
+
+## Project Setup
+
+### Prerequisites
+
+- **Node.js** >= 20
+- **pnpm** (or npm)
+- **MongoDB** 6+
+
+### Install and run
+
+```bash
+cd TaskFlow-backend-service
+pnpm install
+cp .env.example .env
+# Edit .env — set MONGODB_URI and JWT_SECRET (see Environment Variables)
+pnpm run start:dev
+```
+
+Server runs at `http://localhost:5001/api/v1`.
+
+### Seed admin user
+
+The seed script promotes an existing user to `ADMIN`. Register first, then run:
+
+```bash
+pnpm run seed
+# Or: ADMIN_EMAIL=admin@taskflow.com pnpm run seed
+```
+
+<!-- ### Local MongoDB (replica set)
+
+Transactional deletes require a replica set. After starting `mongod`, initialize once:
+
+```bash
+mongosh --eval 'rs.initiate()'
+```
+
+Use a URI such as `mongodb://127.0.0.1:27017/taskflow?replicaSet=rs0` in `.env`. -->
+
+### Scripts
+
+| Command              | Description                        |
+| -------------------- | ---------------------------------- |
+| `pnpm run start:dev` | Dev server with nodemon            |
+| `pnpm run build`     | Compile TypeScript                 |
+| `pnpm start`         | Production (`node dist/server.js`) |
+| `pnpm test`          | Run Jest                           |
+| `pnpm run seed`      | Promote registered user to ADMIN   |
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+| Variable          | Required            | Description                                                           |
+| ----------------- | ------------------- | --------------------------------------------------------------------- |
+| `PORT`            | No (default `5001`) | HTTP port                                                             |
+| `MONGODB_URI`     | Yes                 | MongoDB connection string (**replica set** required for transactions) |
+| `JWT_SECRET`      | Yes                 | Secret for signing JWT access tokens                                  |
+| `CLIENT_ECOM_URL` | Production          | Frontend origin for CORS (e.g. `http://localhost:3000`)               |
+| `NODE_ENV`        | No                  | `development` or `production`                                         |
+| `ADMIN_EMAIL`     | Seed only           | Email to promote to ADMIN (default `admin@taskflow.com`)              |
+
+---
+
+## Demo Credentials
+
+Use these accounts after registering them in the app (or if already present in your database):
+
+| Role  | Email                | Password    |
+| ----- | -------------------- | ----------- |
+| Admin | `admin@taskflow.com` | `Admin@123` |
+
+Run `pnpm run seed` after registering `admin@taskflow.com` to grant system-wide admin access.
+
+---
+
+## Deployment
+
+### Production build (Node)
+
+```bash
+pnpm install
+pnpm run build
+NODE_ENV=production pnpm start
+```
+
+Ensure production env vars are set: `MONGODB_URI`, `JWT_SECRET`, `CLIENT_ECOM_URL`, and optionally `PORT`.
+
+### Vercel
+
+This repo includes [`vercel.json`](vercel.json) pointing at `dist/server.js`.
+
+1. Connect the repository to Vercel.
+2. Set environment variables in the Vercel project settings (same as above).
+3. Build command: `pnpm run build`
+4. Output: serverless Node handler from `dist/server.js`
+
+---
+
 ## Purpose & Description
 
-TaskFlow is a real-time Kanban project management platform for teams. The backend provides:
-
-- JWT authentication with refresh-token cookies
-- Project and membership management
-- Kanban tasks with priorities, assignees, due dates, and validation rules
-- Dashboard analytics scoped by project visibility
-- Activity audit log, flat task comments, and persisted notifications
-- Real-time updates via Socket.IO
+TaskFlow is a real-time Kanban project management platform for teams. See [Features Overview](#features-overview) for a summary; details below cover roles, permissions, and API design.
 
 ### Tech Stack
 
@@ -56,7 +167,7 @@ There is **no per-member role field** in the database (no viewer/editor enum). O
 
 ### Demo accounts
 
-Demo users are seeded for testing. They map to **behavior**, not separate code roles:
+See [Demo Credentials](#demo-credentials) for login emails and passwords. Global vs project role mapping:
 
 | Account              | Global role | Typical project role |
 | -------------------- | ----------- | -------------------- |
@@ -340,61 +451,6 @@ Base URL: `http://localhost:5000/api/v1`
 **Server → client:** `taskCreated`, `taskUpdate`, `taskDelete`, `taskAssign`, `commentAdded`, `commentDeleted`, `projectUpdated`, `projectDeleted`, `projectMemberAdd`, `projectMemberRemove`, `memberAssigneesCleared`, `notification`
 
 **Client → server:** `joinProject(projectId)`, `joinUser(userId)` (both permission-checked)
-
----
-
-## Setup
-
-```bash
-cd TaskFlow-backend-service
-pnpm install
-cp .env.example .env
-# Set MONGODB_URI and JWT_SECRET
-pnpm run seed      # Promotes admin@taskflow.com to ADMIN
-pnpm run start:dev
-```
-
-Server runs at `http://localhost:5000/api/v1`.
-
-### Environment variables
-
-| Variable          | Required            | Description                                              |
-| ----------------- | ------------------- | -------------------------------------------------------- |
-| `PORT`            | No (default `5000`) | HTTP port                                                |
-| `MONGODB_URI`     | Yes                 | MongoDB connection string                                |
-| `JWT_SECRET`      | Yes                 | JWT signing secret                                       |
-| `CLIENT_ECOM_URL` | Prod                | Frontend origin for CORS (e.g. `http://localhost:3000`)  |
-| `NODE_ENV`        | No                  | `development` or `production`                            |
-| `ADMIN_EMAIL`     | Seed                | Email to promote to ADMIN (default `admin@taskflow.com`) |
-
-### Demo credentials
-
-| Account              | Email               | Password   |
-| -------------------- | ------------------- | ---------- |
-| Admin                | admin@taskflow.com  | Admin@123  |
-| Project owner (demo) | pm@taskflow.com     | Pm@123     |
-| Team member (demo)   | member@taskflow.com | Member@123 |
-
-### Scripts
-
-| Command              | Description                        |
-| -------------------- | ---------------------------------- |
-| `pnpm run start:dev` | Dev server with nodemon            |
-| `pnpm run build`     | Compile TypeScript                 |
-| `pnpm start`         | Production (`node dist/server.js`) |
-| `pnpm test`          | Run Jest                           |
-| `pnpm run seed`      | Seed admin user                    |
-
----
-
-## Deployment
-
-```bash
-pnpm run build
-pnpm start
-```
-
-Vercel deployment is configured via `vercel.json` (entry: `dist/server.js`).
 
 ---
 
