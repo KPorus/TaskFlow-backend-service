@@ -472,4 +472,4 @@ Planned improvements not yet implemented:
 
 ## Related
 
-- Frontend client: [`../TaskFlow-frontend-service`](../TaskFlow-frontend-service)
+- Frontend client: [`TaskFlow-frontend-service`](https://github.com/KPorus/TaskFlow-frontend-service)
