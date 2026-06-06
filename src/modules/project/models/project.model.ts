@@ -1,7 +1,15 @@
+import {
+  ClientSession,
+  DeleteResult,
+  Model,
+  model,
+  Schema,
+  Types,
+} from "mongoose";
 import { ProjectDocument, ProjectStatus } from "../types/project.types";
+import { Activity } from "@/modules/activity/models/activity.model";
 import { Comment } from "@/modules/comment/models/comment.model";
 import { Task } from "@/modules/task/models/task.model";
-import { Model, model, Schema, Types } from "mongoose";
 
 export interface ProjectModelType extends Model<ProjectDocument> {
   findByProjectId(Id: Types.ObjectId | string): Promise<ProjectDocument | null>;
@@ -26,7 +34,8 @@ export interface ProjectModelType extends Model<ProjectDocument> {
   ): Promise<ProjectDocument | null>;
   deleteProject(
     id: Types.ObjectId | string,
-  ): Promise<{ deletedCount?: number }>;
+    option?: { session?: ClientSession },
+  ): Promise<DeleteResult>;
   addMember(
     projectId: Types.ObjectId | string,
     member: { user: Types.ObjectId | string },
@@ -143,16 +152,22 @@ ProjectSchema.statics.removeMember = async function (
 
 ProjectSchema.statics.deleteProject = async function (
   id: Types.ObjectId | string,
+  option?: { session?: ClientSession },
 ) {
-  const project = await this.findById({ _id: id });
+  const session = option?.session ?? null;
+  const project = await this.findById(id).session(session);
   if (!project) return { deletedCount: 0 };
 
-  const taskIds = await Task.find({ project: id }).distinct("_id");
+  const taskIds = await Task.distinct("_id", { project: id }).session(session);
   if (taskIds.length > 0) {
-    await Comment.deleteMany({ task: { $in: taskIds } });
+    await Comment.deleteMany(
+      { task: { $in: taskIds } },
+      { session: option?.session },
+    );
   }
-  await Task.deleteMany({ project: id });
-  return await this.deleteOne({ _id: id });
+  await Task.deleteMany({ project: id }, { session: option?.session });
+  await Activity.deleteMany({ project: id }, { session: option?.session });
+  return await this.deleteOne({ _id: id }, { session: option?.session });
 };
 
 export const Project = model<ProjectDocument, ProjectModelType>(
