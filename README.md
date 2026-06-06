@@ -2,7 +2,7 @@
 
 REST API for **TaskFlow** — Smart Project & Task Collaboration System.
 
-Companion frontend: [`../TaskFlow-frontend-service/README.md`](../TaskFlow-frontend-service/README.md)
+Companion frontend: [`TaskFlow-frontend-service`](https://github.com/KPorus/TaskFlow-frontend-service/blob/main/README.md)
 
 ---
 
