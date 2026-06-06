@@ -21,7 +21,7 @@ import { ProjectStatus } from "../types/project.types";
 import { isAdmin } from "@/helpers/permission.helper";
 import { Project } from "../models/project.model";
 import { AppError } from "@/types/error.type";
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import { io } from "@/server";
 
 const createProject = async (
@@ -235,10 +235,23 @@ const removeMember = async (
 };
 
 const deleteProject = async (id: string) => {
-  const result = await Project.deleteProject(new Types.ObjectId(id));
-  if (result.deletedCount && result.deletedCount > 0) {
+  const session = await mongoose.startSession();
+  let result: Awaited<ReturnType<typeof Project.deleteProject>> | undefined;
+
+  try {
+    await session.withTransaction(async () => {
+      result = await Project.deleteProject(new Types.ObjectId(id), {
+        session,
+      });
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  if (result?.deletedCount && result.deletedCount > 0) {
     io.to(id).emit("projectDeleted", { projectId: id });
   }
+
   return {
     message: "Project deleted successfully",
     result,
